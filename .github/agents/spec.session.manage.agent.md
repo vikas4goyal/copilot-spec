@@ -10,39 +10,65 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
-`$ARGUMENTS` **SHOULD** be a JSON object when called by another agent. Parse it and use the fields to drive execution. Plain-text or empty input is also accepted for interactive use.
+`$ARGUMENTS` **MUST** be a JSON object when called by another agent. Parse it and use the fields to drive execution.
 
 ### Caller JSON Payload Schema
 
-Agents calling `spec.session.manage` as a post-execution step **MUST** pass a JSON body with at minimum `action` and `artifactId`:
+Three actions cover the full agent lifecycle. Every agent calls `start` before doing work and `complete` (or `skip`) when done.
+
+#### `start` — register as running, check deps
+
+```json
+{ "action": "start", "artifactId": "constitution" }
+```
+
+- Looks up `artifactId` in the dependency map.
+- Checks every required dep is present in `pipeline.completed` **or** `pipeline.skipped`.
+- If any dep is missing → **stop and error**: `"Run /spec.<dep> first (id: <dep>)"`
+- If deps satisfied → push `artifactId` onto `pipeline.running`.
+
+#### `complete` — finish work, pop from running
 
 ```json
 {
   "action": "complete",
   "artifactId": "constitution",
-  "summary": "One-sentence description of what this agent produced.",
-  "handoff": "Key context the next agent needs to continue.",
-  "outputPath": ".spec/memory/constitution.md",
-  "metadata": {}
+  "summary": "One sentence describing what was produced.",
+  "next": {
+    "agent": "spec.specify",
+    "prompt": "Context the next agent needs to continue."
+  }
 }
 ```
 
-| Field | Required | Description |
+- Remove `artifactId` from `pipeline.running`.
+- Add `artifactId` to `pipeline.completed`.
+- Append `{ id, summary, completedAt }` to `artifacts[]`.
+- If `next` provided → write it to `pipeline.next`.
+
+#### `skip` — mark artifact intentionally skipped
+
+```json
+{ "action": "skip", "artifactId": "constitution" }
+```
+
+- Add `artifactId` to `pipeline.skipped`. Skipped artifacts satisfy dependency checks.
+
+#### `archive` — seal the session (used by `spec.release` only)
+
+```json
+{ "action": "archive" }
+```
+
+- Set `status: "archived"` on the session root.
+
+| Field | Required for | Description |
 |---|---|---|
-| `action` | **Yes** | Operation to perform. One of: `complete`, `update`, `skip`, `archive`. |
-| `artifactId` | **Yes** | The artifact id this call targets (e.g. `constitution`, `specify`, `plan`). |
-| `summary` | Recommended | Short human-readable summary of what the calling agent produced. Stored in `artifacts[].summary`. |
-| `handoff` | Recommended | Context string for the next agent. Stored in `artifacts[].handoff` and `pipeline.next_prompt`. |
-| `outputPath` | Optional | Relative path to the primary output file. Stored in `artifacts[].outputPath`. |
-| `metadata` | Optional | Arbitrary agent-specific key/value pairs to attach to the artifact. |
-
-**Action routing:**
-- `complete` → run `post-agent` wrapper (updates `summary`, `handoff`, `outputPath`, marks artifact `complete`)
-- `update` → run `update-artifact` to patch fields without changing status
-- `skip` → run `skip-artifact`
-- `archive` → run `archive` (used by `spec.release` only)
-
-If `$ARGUMENTS` is not valid JSON, fall back to interactive/plain-text interpretation and proceed as before.
+| `action` | all | `start` \| `complete` \| `skip` \| `archive` |
+| `artifactId` | start, complete, skip | ID from the dependency map |
+| `summary` | complete | One-sentence description stored in `artifacts[].summary` |
+| `next.agent` | complete (optional) | Agent name to suggest next, e.g. `spec.specify` |
+| `next.prompt` | complete (optional) | Handoff context stored in `pipeline.next` |
 
 ## Purpose
 
@@ -127,76 +153,75 @@ Run from the repo root:
 
 ## Agent Lifecycle Pattern
 
-Every artifact-producing agent should follow this pattern:
+Every artifact-producing agent MUST follow this pattern:
 
 ```text
-1. pre-agent   → bootstrap session + mark artifact in_progress
+1. Call spec.session.manage  { action: "start", artifactId }          ← push to running, check deps
 2. [do work]
-3. [optional] manage-session update/update-multi for extra session metadata
-4. post-agent  → write summary + handoff + complete-artifact
+3. Call spec.session.manage  { action: "complete", artifactId,         ← pop from running, push to completed
+                               summary, next }
 ```
 
-Read context from previously completed artifacts before starting:
+If a dep check fails on `start`, **stop immediately** and tell the user which agent to run first.
+
+Read context from previously completed artifacts before starting work:
 
 ```powershell
 $session     = Get-Content .spec/session.json -Raw | ConvertFrom-Json
 $specSummary = ($session.artifacts | Where-Object { $_.id -eq 'specify' }).summary
-$handoff     = $session.pipeline.next_prompt
+$nextPrompt  = $session.pipeline.next.prompt
 ```
 
 ```bash
 spec_summary=$(jq -r '.artifacts[] | select(.id=="specify") | .summary' .spec/session.json)
-handoff=$(jq -r '.pipeline.next_prompt // empty' .spec/session.json)
+next_prompt=$(jq -r '.pipeline.next.prompt // empty' .spec/session.json)
 ```
 
-## Session JSON Schema (v2.0)
+## Session JSON Schema (v3.0)
+
+`pipeline.running` is a **stack** — agents push themselves on `start` and pop themselves on `complete`. An agent invoked by another agent while it is running will appear deeper in the stack.
 
 ```json
 {
-  "_schema": "spec-session/2.0",
+  "_schema": "spec-session/3.0",
   "id": "20260423-143022-AbCd",
   "name": "modern-register-ui",
   "description": "Redesign the registration UI with OAuth2 and mobile-first layout",
   "branch_name": "modern-register-ui",
   "feature_dir": "specs/20260423-modern-register-ui",
-  "isComplete": false,
   "status": "active",
   "pipeline": {
-    "current_agent": "spec.plan",
-    "last_completed": "specify",
-    "next_recommended": "/spec.plan",
-    "next_prompt": "Building a modern registration UI. OAuth2 login, mobile-first. React + TypeScript.",
-    "agents_run": [{ "agent": "spec.specify", "ran_at": "2026-04-23T14:30:22Z" }]
+    "running": ["specify", "constitution"],
+    "completed": [],
+    "skipped": [],
+    "next": {
+      "agent": "spec.specify",
+      "prompt": "Constitution v1.2.0 ratified. Reflect principles in spec requirements."
+    }
   },
   "artifacts": [
     {
-      "id": "specify",
-      "command": "/spec.specify",
-      "label": "Feature Specification",
-      "outputPath": "specs/20260423-modern-register-ui/spec.md",
-      "status": "complete",
-      "required": true,
-      "deps": [],
-      "missingDeps": [],
-      "summary": "3 user flows, 12 functional requirements. OAuth2 + email/password auth.",
-      "handoff": "React + TypeScript, OAuth2, mobile-first. Must integrate with auth-service.",
+      "id": "constitution",
+      "summary": "Constitution amended to v1.2.0: added Observability principle.",
       "completedAt": "2026-04-23T14:44:00Z"
     }
   ]
 }
 ```
 
+> **Example stack reading**: `running: ["specify", "constitution"]` means `specify` is the outer agent; it called `constitution` which is currently executing. When `constitution` completes it pops off, leaving `running: ["specify"]`.
+
 ## Key Fields
 
 | Field | Set By | Description |
 |---|---|---|
-| `pipeline.current_agent` | `add-agent` / wrappers | Agent currently running |
-| `pipeline.next_recommended` | auto (`complete-artifact`) | Next command to run |
-| `pipeline.next_prompt` | auto (`artifact.handoff`) | Context prompt for the next agent |
-| `artifacts[].status` | wrappers / scripts | `ready` \| `pending` \| `in_progress` \| `complete` \| `skipped` |
-| `artifacts[].summary` | completing agent | What this step produced |
-| `artifacts[].handoff` | completing agent | Context to pass to the next agent |
-| `artifacts[].missingDeps` | auto (`complete-artifact`) | Empty means the artifact can run |
+| `pipeline.running` | `start` action | Stack of artifact IDs currently executing (last = innermost) |
+| `pipeline.completed` | `complete` action | Ordered list of artifact IDs that finished successfully |
+| `pipeline.skipped` | `skip` action | Artifact IDs intentionally skipped (count as satisfied deps) |
+| `pipeline.next` | `complete` action (`next` field) | Suggested next agent + prompt for the user |
+| `artifacts[].id` | `complete` action | Artifact identifier |
+| `artifacts[].summary` | `complete` action | What this step produced |
+| `artifacts[].completedAt` | `complete` action | ISO-8601 timestamp |
 
 ## Output
 

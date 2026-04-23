@@ -26,6 +26,13 @@ You **MUST** consider the user input before proceeding (if not empty).
 - Execute the `spec.session.init` sub-agent, forwarding the user's `$ARGUMENTS` as high-level context. Wait for it to finish before proceeding.
   - The session init agent initializes `.spec/session.json`, records `spec.constitution` as the running agent, and can derive `name`, `description`, and `branch_name` from the provided arguments.
 
+**Pre-Execution: Register as Running**:
+- Execute the `spec.session.manage` sub-agent with the following payload and wait for it to finish.
+  If any dependency is reported missing, **stop and inform the user** before proceeding.
+  ```json
+  { "action": "start", "artifactId": "constitution" }
+  ```
+
 ## Outline
 
 You are updating the project constitution at `.spec/memory/constitution.md`. This file is a TEMPLATE containing placeholder tokens in square brackets (e.g. `[PROJECT_NAME]`, `[PRINCIPLE_1_NAME]`). Your job is to (a) collect/derive concrete values, (b) fill the template precisely, and (c) propagate any amendments across dependent artifacts.
@@ -101,29 +108,19 @@ Do not create a new template; always operate on the existing `.spec/memory/const
 - Execute the `spec.git.commit` sub-agent and wait for it to finish.
 
 **Post-Execution: Update Session State**:
-- Execute the `spec.session.manage` sub-agent, passing a JSON payload so it knows exactly what to do and what this agent produced. Wait for it to finish.
-
-  Build the payload from the outputs of this run:
+- Execute the `spec.session.manage` sub-agent with the payload below, populated from the actual results of this run. Wait for it to finish.
 
   ```json
   {
     "action": "complete",
     "artifactId": "constitution",
-    "summary": "<one-sentence summary, e.g.: 'Constitution amended to v1.2.0: added Observability principle, updated Governance section.'>",
-    "handoff": "<key context for the next agent, e.g.: 'Constitution v1.2.0 ratified. Observability and versioning principles now in effect. Reflect these in spec requirements and plan constraints.'>",
-    "outputPath": ".spec/memory/constitution.md",
-    "metadata": {
-      "constitutionVersion": "<new version, e.g. 1.2.0>",
-      "versionBump": "<major | minor | patch>",
-      "bumpRationale": "<one-line reason for the version bump>",
-      "filesModified": ["<list of files updated, e.g. .spec/memory/constitution.md>"],
-      "principlesAdded": ["<names of any new principles, or empty array>"],
-      "principlesRemoved": ["<names of removed principles, or empty array>"],
-      "principlesRenamed": {"<old name>": "<new name>"},
-      "deferredItems": ["<any TODO placeholders left, or empty array>"]
+    "summary": "<one sentence, e.g.: 'Constitution amended to v1.2.0: added Observability principle.'>",
+    "next": {
+      "agent": "spec.specify",
+      "prompt": "<what the next agent needs, e.g.: 'Constitution v1.2.0 in effect. Observability and versioning principles must be reflected in spec requirements.'>"
     }
   }
   ```
 
-  Populate every field from the actual results of this run (version, bump rationale, modified files, etc.). Do not send placeholder text as-is.
+  Replace the angle-bracket placeholders with real values from this run. Do not forward template text as-is.
 

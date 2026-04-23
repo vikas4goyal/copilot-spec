@@ -84,7 +84,28 @@ That is the complete execution — no separate `manage-session` calls are needed
 
 ## Output
 
-```text
+After `create-new-feature` runs, `session.json` is created with the v3.0 schema and an empty pipeline:
+
+```json
+{
+  "_schema": "spec-session/3.0",
+  "id": "20260423-143022-AbCd",
+  "name": "oauth2-login",
+  "description": "Implements OAuth2 login flow allowing users to authenticate with their Google account.",
+  "branch_name": "oauth2-login",
+  "feature_dir": "specs/20260423-oauth2-login",
+  "status": "active",
+  "pipeline": {
+    "running": [],
+    "completed": [],
+    "skipped": [],
+    "next": null
+  },
+  "artifacts": []
+}
+```
+
+Console output:
 [session.init] Session created: .spec/session.json (id: 20260423-143022-AbCd)
 [session.init] Branch 'oauth2-login' created and checked out
 [session.init] Spec file created from template: specs/20260423-oauth2-login/spec.md
