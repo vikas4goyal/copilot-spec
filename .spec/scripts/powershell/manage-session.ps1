@@ -3,8 +3,8 @@
 #
 # Usage:
 #   manage-session.ps1 -Action init
-#   manage-session.ps1 -Action update -Field feature.branch_name -Value "001-my-feature"
-#   manage-session.ps1 -Action update-multi -JsonPatch '{"feature":{"branch_name":"001-x","feature_num":"001"}}'
+#   manage-session.ps1 -Action update -Field branch_name -Value "001-my-feature"
+#   manage-session.ps1 -Action update-multi -JsonPatch '{"name":"my-feature","branch_name":"001-my-feature","feature_num":"001"}'
 #   manage-session.ps1 -Action read
 #   manage-session.ps1 -Action add-agent -AgentName "spec.specify"
 #   manage-session.ps1 -Action complete-artifact -ArtifactId "specify"
@@ -60,7 +60,7 @@ function Read-Session {
 }
 
 function Save-Session($session) {
-    $session.session.updated_at = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
+    $session.updated_at = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
     $session | ConvertTo-Json -Depth 20 | Set-Content $sessionFile -Encoding UTF8
 }
 
@@ -105,31 +105,31 @@ function Update-PipelineNext($session) {
 
 function Initialize-Session {
     if (Test-Path $sessionFile) {
-        Write-Host "[session] Session already exists at $sessionFile — skipping init." -ForegroundColor DarkGray
+        Write-Host ('[session] Session already exists at ' + $sessionFile + ' - skipping init.') -ForegroundColor DarkGray
         return Read-Session
     }
 
     if (-not (Test-Path $templateFile)) {
-        Write-Error "[session] Template not found at $templateFile. Cannot initialize session."
+        Write-Error ('[session] Template not found at ' + $templateFile + '. Cannot initialize session.')
         exit 1
     }
 
     $session = Get-Content $templateFile -Raw | ConvertFrom-Json
     $now     = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
 
-    $session.session.id         = Get-NewSessionId
-    $session.session.created_at = $now
-    $session.session.updated_at = $now
-    $session.session.status     = 'active'
+    $session.id         = Get-NewSessionId
+    $session.created_at = $now
+    $session.updated_at = $now
+    $session.status     = 'active'
 
-    if (Test-HasGit) {
-        try { $b = (git -C $repoRoot rev-parse --abbrev-ref HEAD 2>$null).Trim(); if ($b) { $session.git.base_branch = $b } } catch {}
-        try { $r = (git -C $repoRoot remote get-url origin 2>$null).Trim();       if ($r) { $session.git.remote_url  = $r } } catch {}
-        try { $p = (git -C $repoRoot rev-parse --show-toplevel 2>$null).Trim();   if ($p) { $session.git.repository  = $p } } catch {}
+    # Set branch_name from current git branch or feature name fallback
+    $branch = Get-CurrentBranch
+    if ($branch -and $branch -ne 'main' -and $branch -ne 'HEAD') {
+        $session.branch_name = $branch.Trim()
     }
 
     $session | ConvertTo-Json -Depth 20 | Set-Content $sessionFile -Encoding UTF8
-    Write-Host "[session] Initialized session at $sessionFile (id: $($session.session.id))" -ForegroundColor Green
+    Write-Host ('[session] Initialized session at ' + $sessionFile + ' (id: ' + $session.id + ')') -ForegroundColor Green
     return $session
 }
 
@@ -138,7 +138,7 @@ function Update-SessionField([string]$FieldPath, $FieldValue) {
     $session = Read-Session
     Set-DotNotation -Object $session -Path $FieldPath -Value $FieldValue
     Save-Session $session
-    Write-Host "[session] Updated $FieldPath" -ForegroundColor DarkGray
+    Write-Host ('[session] Updated ' + $FieldPath) -ForegroundColor DarkGray
     return $session
 }
 
@@ -150,13 +150,13 @@ function Add-AgentToSession([string]$Agent) {
     $session.pipeline.agents_run    = @($session.pipeline.agents_run) + $entry
     $session.pipeline.current_agent = $Agent
     Save-Session $session
-    Write-Host "[session] Recorded agent '$Agent' in session." -ForegroundColor DarkGray
+    Write-Host ('[session] Recorded agent ''' + $Agent + ''' in session.') -ForegroundColor DarkGray
     return $session
 }
 
 function Complete-Artifact([string]$Id) {
     if (-not (Test-Path $sessionFile)) {
-        Write-Error "[session] No active session. Run 'init' first."; exit 1
+        Write-Error '[session] No active session. Run ''init'' first.'; exit 1
     }
     $session = Read-Session
     $now     = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
@@ -164,7 +164,7 @@ function Complete-Artifact([string]$Id) {
     # Find the artifact
     $artifact = $session.artifacts | Where-Object { $_.id -eq $Id }
     if (-not $artifact) {
-        Write-Error "[session] Artifact '$Id' not found in session."; exit 1
+        Write-Error ('[session] Artifact ''' + $Id + ''' not found in session.'); exit 1
     }
 
     # Mark it complete
@@ -196,44 +196,42 @@ function Complete-Artifact([string]$Id) {
         Where-Object { $_.required -eq $true -and $_.status -notin @('complete','skipped') }
     $session.isComplete = ($requiredPending.Count -eq 0)
 
-    # Keep changeName in sync with feature.name
-    if ($session.feature.name) { $session.changeName = $session.feature.name }
 
     Save-Session $session
-    Write-Host "[session] Artifact '$Id' marked complete. Next: $($session.pipeline.next_recommended)" -ForegroundColor Green
+    Write-Host ('[session] Artifact ''' + $Id + ''' marked complete. Next: ' + $session.pipeline.next_recommended) -ForegroundColor Green
     return $session
 }
 
 function Update-Artifact([string]$Id, [string]$Field, [string]$FieldValue) {
     if (-not (Test-Path $sessionFile)) {
-        Write-Error "[session] No active session. Run 'init' first."; exit 1
+        Write-Error '[session] No active session. Run ''init'' first.'; exit 1
     }
     $validFields = @('summary','handoff','status','outputPath')
     if ($Field -notin $validFields) {
-        Write-Error "[session] Invalid ArtifactField '$Field'. Valid: $($validFields -join ', ')"; exit 1
+        Write-Error ('[session] Invalid ArtifactField ''' + $Field + '''. Valid: ' + ($validFields -join ', ')); exit 1
     }
     $session  = Read-Session
     $artifact = $session.artifacts | Where-Object { $_.id -eq $Id }
     if (-not $artifact) {
-        Write-Error "[session] Artifact '$Id' not found."; exit 1
+        Write-Error ('[session] Artifact ''' + $Id + ''' not found.'); exit 1
     }
     $artifact.$Field = $FieldValue
     Save-Session $session
-    Write-Host "[session] Artifact '$Id'.$Field updated." -ForegroundColor DarkGray
+    Write-Host ('[session] Artifact ''' + $Id + '''.' + $Field + ' updated.') -ForegroundColor DarkGray
     return $session
 }
 
 function Skip-Artifact([string]$Id) {
     if (-not (Test-Path $sessionFile)) {
-        Write-Error "[session] No active session. Run 'init' first."; exit 1
+        Write-Error '[session] No active session. Run ''init'' first.'; exit 1
     }
     $session  = Read-Session
     $artifact = $session.artifacts | Where-Object { $_.id -eq $Id }
     if (-not $artifact) {
-        Write-Error "[session] Artifact '$Id' not found."; exit 1
+        Write-Error ('[session] Artifact ''' + $Id + ''' not found.'); exit 1
     }
     if ($artifact.required -eq $true) {
-        Write-Warning "[session] Artifact '$Id' is marked required. Skipping it may break downstream steps."
+        Write-Warning ('[session] Artifact ''' + $Id + ''' is marked required. Skipping it may break downstream steps.')
     }
 
     $artifact.status      = 'skipped'
@@ -257,26 +255,26 @@ function Skip-Artifact([string]$Id) {
     $session.isComplete = ($requiredPending.Count -eq 0)
 
     Save-Session $session
-    Write-Host "[session] Artifact '$Id' skipped. Next: $($session.pipeline.next_recommended)" -ForegroundColor Yellow
+    Write-Host ('[session] Artifact ''' + $Id + ''' skipped. Next: ' + $session.pipeline.next_recommended) -ForegroundColor Yellow
     return $session
 }
 
 function Test-ArtifactDeps([string]$Id) {
     if (-not (Test-Path $sessionFile)) {
-        Write-Error "[session] No active session."; exit 1
+        Write-Error '[session] No active session.'; exit 1
     }
     $session  = Read-Session
     $artifact = $session.artifacts | Where-Object { $_.id -eq $Id }
     if (-not $artifact) {
-        Write-Error "[session] Artifact '$Id' not found."; exit 1
+        Write-Error ('[session] Artifact ''' + $Id + ''' not found.'); exit 1
     }
 
     if ($artifact.missingDeps.Count -eq 0) {
-        Write-Host "[session] '$Id' is ready — all dependencies met." -ForegroundColor Green
+        Write-Host ('[session] ''' + $Id + ''' is ready - all dependencies met.') -ForegroundColor Green
         return $true
     }
 
-    Write-Warning "[session] '$Id' is blocked. Missing dependencies:"
+    Write-Warning ('[session] ''' + $Id + ''' is blocked. Missing dependencies:')
     foreach ($dep in $artifact.missingDeps) {
         $depArt = $session.artifacts | Where-Object { $_.id -eq $dep }
         $cmd    = if ($depArt) { $depArt.command } else { $dep }
@@ -287,25 +285,27 @@ function Test-ArtifactDeps([string]$Id) {
 
 function Archive-Session {
     if (-not (Test-Path $sessionFile)) {
-        Write-Warning "[session] No active session file found at $sessionFile"; return
+        Write-Warning ('[session] No active session file found at ' + $sessionFile); return
     }
     $session     = Read-Session
-    $featureName = $session.feature.branch_name
+    $featureName = if ($session.branch_name) { $session.branch_name }
+                   elseif ($session.name)    { $session.name }
+                   else { $null }
     if ([string]::IsNullOrWhiteSpace($featureName)) {
-        $featureName = $session.session.id
-        Write-Warning "[session] feature.branch_name not set; archiving under id: $featureName"
+        $featureName = $session.id
+        Write-Warning '[session] branch_name not set; archiving under session id'
     }
     $safeName   = $featureName -replace '[^a-zA-Z0-9\-_.]', '-'
     $archiveDir = Join-Path $repoRoot ".spec/features/$safeName"
     New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
 
-    $session.session.status     = 'completed'
-    $session.session.updated_at = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
+    $session.status     = 'completed'
+    $session.updated_at = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
     $session | ConvertTo-Json -Depth 20 | Set-Content $sessionFile -Encoding UTF8
 
     $dest = Join-Path $archiveDir 'session.json'
     Move-Item $sessionFile $dest -Force
-    Write-Host "[session] Archived session to $dest" -ForegroundColor Green
+    Write-Host ('[session] Archived session to ' + $dest) -ForegroundColor Green
 }
 
 # ---------------------------------------------------------------------------
@@ -326,14 +326,12 @@ switch ($Action) {
         if (-not (Test-Path $sessionFile)) { Initialize-Session | Out-Null }
         $session = Read-Session
         Merge-JsonPatch -Target $session -Patch ($JsonPatch | ConvertFrom-Json)
-        # Keep changeName in sync
-        if ($session.feature.name) { $session.changeName = $session.feature.name }
         Save-Session $session
-        Write-Host "[session] Applied JSON patch to session." -ForegroundColor DarkGray
+        Write-Host '[session] Applied JSON patch to session.' -ForegroundColor DarkGray
         if ($Json) { $session | ConvertTo-Json -Depth 20 }
     }
     'read' {
-        if (-not (Test-Path $sessionFile)) { Write-Warning "[session] No active session file." }
+        if (-not (Test-Path $sessionFile)) { Write-Warning '[session] No active session file.' }
         else { Get-Content $sessionFile -Raw }
     }
     'add-agent' {

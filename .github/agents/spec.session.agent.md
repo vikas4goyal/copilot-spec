@@ -12,11 +12,17 @@ You **MUST** consider the user input before proceeding (if not empty).
 Supported actions passed as arguments: `init`, `update`, `add-agent <name>`, `complete-artifact <id>`, `update-artifact <id> <field> <value>`, `skip-artifact <id>`, `check-deps <id>`, `archive`, `read`.
 If no action is specified, default to `init`.
 
+When called with **feature description text** (i.e. arguments that are not a recognized action keyword), treat it as an `init` + context-population call:
+1. Run `init` (idempotent — safe if session already exists).
+2. Derive a short kebab-case `feature.name` and root `branch_name` from the description (e.g. `"Spring Boot project with strict testing"` → `spring-boot-strict-testing`).
+3. Run `add-agent` for the calling agent (if identifiable from context).
+4. Populate `feature.description` and `feature.name` in the session using `update-multi`.
+
 ## Purpose
 
 The session state file (`.spec/session.json`) is the **single source of truth** for the current active spec workflow. It serves two roles simultaneously:
 
-1. **Session metadata** — feature name, git branch, feature directory, which agents ran and when.
+1. **Session metadata** — feature name, git branch, feature directory, which agents ran, and when.
 2. **Artifact pipeline graph** — every command in the workflow is an artifact node with its dependency list, live status, agent summary, and handoff prompt to the next agent.
 
 Together these let any agent answer three questions without human input:
@@ -40,9 +46,9 @@ specify       ──────────────────────
  clarify (opt)        plan (req)    checklist (opt)
                          ↓
                        tasks ─────────────────────── required
-                         ↓              ↓       
-                      analyze (opt)  implement 
-                                      (req)    
+                         ↓                      ↓       
+                      analyze (opt)         implement 
+                                            (req)    
 ```
 
 | id              | command                | required | deps               |
@@ -125,18 +131,18 @@ Appends to `pipeline.agents_run` and sets `pipeline.current_agent`.
 
 ### `update` — set a single session field
 ```powershell
-.spec/scripts/powershell/manage-session.ps1 -Action update -Field "feature.branch_name" -Value "001-my-feature"
+.spec/scripts/powershell/manage-session.ps1 -Action update -Field "branch_name" -Value "001-my-feature"
 ```
 ```bash
-bash .spec/scripts/bash/manage-session.sh --action update --field feature.branch_name --value "001-my-feature"
+bash .spec/scripts/bash/manage-session.sh --action update --field branch_name --value "001-my-feature"
 ```
 
 ### `update-multi` — set multiple session fields atomically
 ```powershell
-.spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"feature":{"name":"modern-register-ui","branch_name":"001-modern-register-ui","feature_dir":"specs/001-modern-register-ui"},"changeName":"modern-register-ui"}'
+.spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"name":"modern-register-ui","branch_name":"001-modern-register-ui","feature_num":"001","feature_dir":"specs/001-modern-register-ui"}'
 ```
 ```bash
-bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch '{"feature":{"name":"modern-register-ui"}}'
+bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch '{"name":"modern-register-ui","branch_name":"001-modern-register-ui"}'
 ```
 
 ### `update-artifact` — write summary or handoff (call before `complete-artifact`)
@@ -246,8 +252,13 @@ handoff=$(jq -r '.pipeline.next_prompt // empty' .spec/session.json)
 ```powershell
 $session = Get-Content .spec/session.json -Raw | ConvertFrom-Json
 
-# Navigation examples
-$session.changeName                    # feature name (kept in sync with feature.name)
+# Root identity fields
+$session.id                            # session ID
+$session.name                          # feature name
+$session.branch_name                   # active branch (e.g. "001-modern-register-ui")
+$session.description                   # feature description
+$session.feature_dir                   # e.g. "specs/001-modern-register-ui"
+$session.status                        # active / completed
 $session.pipeline.next_recommended     # e.g. "/spec.plan"
 $session.pipeline.next_prompt          # handoff prompt from last completed agent
 $session.isComplete                    # true when all required artifacts are done
@@ -259,6 +270,8 @@ $planArtifact.missingDeps              # [] when ready
 $planArtifact.summary                  # what spec.plan produced
 ```
 ```bash
+jq -r '.name'                          .spec/session.json
+jq -r '.branch_name'                   .spec/session.json
 jq -r '.pipeline.next_recommended'     .spec/session.json
 jq -r '.pipeline.next_prompt'          .spec/session.json
 jq -r '.isComplete'                    .spec/session.json
@@ -273,31 +286,18 @@ jq -r '.artifacts[] | select(.id=="plan") | .summary'  .spec/session.json
 ```json
 {
   "_schema": "spec-session/2.0",
-  "changeName": "modern-register-ui",
+  "id": "20260423-143022-AbCd",
+  "name": "modern-register-ui",
+  "description": "Redesign the registration UI with OAuth2 and mobile-first layout",
+  "branch_name": "001-modern-register-ui",
+  "feature_num": "001",
+  "feature_dir": "specs/001-modern-register-ui",
   "schemaName": "spec-driven",
   "isComplete": false,
   "applyRequires": ["tasks"],
-
-  "session": {
-    "id": "20260423-143022-AbCd",
-    "created_at": "2026-04-23T14:30:22Z",
-    "updated_at": "2026-04-23T14:45:10Z",
-    "status": "active"
-  },
-
-  "feature": {
-    "name": "modern-register-ui",
-    "description": "Redesign the registration UI with OAuth2 and mobile-first layout",
-    "branch_name": "001-modern-register-ui",
-    "feature_num": "001",
-    "feature_dir": "specs/001-modern-register-ui"
-  },
-
-  "git": {
-    "base_branch": "develop",
-    "remote_url": "https://github.com/org/repo.git",
-    "repository": "/path/to/repo"
-  },
+  "created_at": "2026-04-23T14:30:22Z",
+  "updated_at": "2026-04-23T14:45:10Z",
+  "status": "active",
 
   "pipeline": {
     "current_agent": "spec.plan",
@@ -346,7 +346,15 @@ jq -r '.artifacts[] | select(.id=="plan") | .summary'  .spec/session.json
 
 | Field | Set By | Description |
 |---|---|---|
-| `changeName` | `spec.specify` / `update-multi` | Feature name — mirrors `feature.name` |
+| `id` | `init` | Unique session ID (timestamp + random suffix) |
+| `name` | `spec.session` / `update-multi` | Feature name — derived from arguments or user input |
+| `description` | `spec.session` / `update-multi` | Full feature description |
+| `branch_name` | `spec.session` / `update-multi` | Active branch — derived from args or git; used for archiving |
+| `feature_num` | `update-multi` | Sequential feature number (e.g. `"001"`) |
+| `feature_dir` | `update-multi` | Relative path to the feature's spec folder |
+| `status` | `init` / `archive` | `active` while in progress, `completed` after archive |
+| `created_at` | `init` | ISO timestamp when session was created |
+| `updated_at` | auto (every save) | ISO timestamp of last write |
 | `isComplete` | auto (complete-artifact) | `true` when all required artifacts are done/skipped |
 | `applyRequires` | template | Artifact IDs that must be complete before `/spec.implement` |
 | `pipeline.next_recommended` | auto (complete-artifact) | Next command to run |

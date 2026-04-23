@@ -1,32 +1,19 @@
 {
   "_schema": "spec-session/2.0",
-  "_description": "Active session state for the current spec workflow. Unifies change-descriptor artifact pipeline with session metadata. Each artifact node tracks its dependency graph, run status, agent summary, and handoff prompt to the next agent. One file per active flow. Archived to .spec/features/<feature-name>/ by the release agent when the flow completes.",
+  "_description": "Active session state for the current spec workflow. Flat structure — all identity, timing, and feature fields live at root. One file per active flow. Archived to .spec/features/<name>/ by the release agent when the flow completes.",
 
-  "changeName": null,
+  "id": null,
+  "name": null,
+  "description": null,
+  "branch_name": null,
+  "feature_num": null,
+  "feature_dir": null,
   "schemaName": "spec-driven",
   "isComplete": false,
   "applyRequires": ["tasks"],
-
-  "session": {
-    "id": null,
-    "created_at": null,
-    "updated_at": null,
-    "status": "active"
-  },
-
-  "feature": {
-    "name": null,
-    "description": null,
-    "branch_name": null,
-    "feature_num": null,
-    "feature_dir": null
-  },
-
-  "git": {
-    "base_branch": null,
-    "remote_url": null,
-    "repository": null
-  },
+  "created_at": null,
+  "updated_at": null,
+  "status": "active",
 
   "pipeline": {
     "current_agent": null,
