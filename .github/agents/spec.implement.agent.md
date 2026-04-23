@@ -168,31 +168,4 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/spec.tasks` first to regenerate the task list.
 
-10. **Check for extension hooks**: After completion validation, check if `.spec/extensions.yml` exists in the project root.
-    - If it exists, read it and look for entries under the `hooks.after_implement` key
-    - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
-    - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
-    - For each remaining hook, do **not** attempt to interpret or evaluate hook `condition` expressions:
-        - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
-        - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
-    - For each executable hook, output the following based on its `optional` flag:
-        - **Optional hook** (`optional: true`):
-          ```
-          ## Extension Hooks
-  
-          **Optional Hook**: {extension}
-          Command: `/{command}`
-          Description: {description}
-  
-          Prompt: {prompt}
-          To execute: `/{command}`
-          ```
-        - **Mandatory hook** (`optional: false`):
-          ```
-          ## Extension Hooks
-  
-          **Automatic Hook**: {extension}
-          Executing: `/{command}`
-          EXECUTE_COMMAND: {command}
-          ```
-    - If no hooks are registered or `.spec/extensions.yml` does not exist, skip silently
+10. **Commit Changes**: Execute the `spec.git.commit` sub-agent and wait for it to finish.
