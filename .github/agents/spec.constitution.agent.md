@@ -16,9 +16,15 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
-**Pre-Execution: Bootstrap Session State** _(must run first, before any other step)_:
+**Pre-Execution: Initialize Git Repository** _(must run first)_:
+- Execute the `spec.git.initialize` sub-agent and wait for it to finish before proceeding.
+
+**Pre-Execution: Initial Commit** _(run after git is initialized)_:
+- Execute the `spec.git.commit` sub-agent and wait for it to finish before proceeding.
+
+**Pre-Execution: Bootstrap Session State** _(run after git steps are complete)_:
 - Execute the `spec.session` sub-agent, forwarding the user's `$ARGUMENTS` as its input. Wait for it to finish before proceeding.
-  - The session agent handles everything in one call: initializing the session if not already active, recording `spec.constitution` as the running agent, and deriving `feature.name` and `branch_name` from the provided arguments.
+  - The session agent handles everything in one call: initializing the session if not already active, recording `spec.constitution` as the running agent, and deriving `name` and `branch_name` from the provided arguments.
   - If a session is **already active** (e.g. this agent was invoked mid-flow from `spec.plan` or `spec.clarify`), the session agent will detect the existing `.spec/session.json`, skip re-initialization, and only append this agent to `pipeline.agents_run` — no existing session data is overwritten.
 
 ## Outline

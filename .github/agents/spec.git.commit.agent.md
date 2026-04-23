@@ -3,8 +3,7 @@ description: Auto-commit changes after a Spec Kit command completes
 ---
 
 
-<!-- Extension: git -->
-<!-- Config: .specify/extensions/git/ -->
+
 # Auto-Commit Changes
 
 Automatically stage and commit all changes after a Spec Kit command completes.
@@ -164,8 +163,8 @@ chore: update files
 
 After constructing the commit message (subject + body), run the appropriate script, passing the full multi-line message as the first argument:
 
-- **Bash**: `.specify/extensions/git/scripts/bash/auto-commit.sh "<commit_message>"`
-- **PowerShell**: `.specify/extensions/git/scripts/powershell/auto-commit.ps1 -CommitMessage "<commit_message>"`
+- **Bash**: `.spec/scripts/bash/auto-commit.sh "<commit_message>"`
+- **PowerShell**: `.spec/scripts/powershell/auto-commit.ps1 -CommitMessage "<commit_message>"`
 
 For multi-line messages use a newline (`\n`) between the subject and body when constructing the string, or wrap the whole message in a here-string. The script passes it directly to `git commit -m`.
 

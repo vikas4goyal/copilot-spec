@@ -17,5 +17,5 @@ Steps:
    - **Subject**: `<prefix>: <description>` — max 72 chars, present tense, lowercase
    - **Body**: blank line then up to 5 bullet points (`-`), each max 100 chars, describing what changed and why — no need to list every file, just the key changes
 7. Pass the full message (subject + body) to the script:
-   - **PowerShell**: `.specify/extensions/git/scripts/powershell/auto-commit.ps1 -CommitMessage "<message>"`
-   - **Bash**: `.specify/extensions/git/scripts/bash/auto-commit.sh "<message>"`
+   - **PowerShell**: `.spec/scripts/powershell/auto-commit.ps1 -CommitMessage "<message>"`
+   - **Bash**: `.spec/scripts/bash/auto-commit.sh "<message>"`
