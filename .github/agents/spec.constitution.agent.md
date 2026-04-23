@@ -16,6 +16,16 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
+**Pre-Execution: Bootstrap Session State** _(must run first, before any other step)_:
+- Check if `.spec/session.json` exists.
+  - If **missing**: execute the `spec.session` sub-agent (action: `init`) to create it from the template and wait for it to finish.
+  - If **present**: read it and continue — skip re-initialization.
+- After the session is initialized, record this agent in the session by executing:
+  - PowerShell: `.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.constitution"`
+  - Bash: `bash .spec/scripts/bash/manage-session.sh --action add-agent --agent-name "spec.constitution"`
+- Also update `workflow.initiated_by` to `"spec.constitution"` if this field is still null:
+  - PowerShell: `.spec/scripts/powershell/manage-session.ps1 -Action update -Field "workflow.initiated_by" -Value "spec.constitution"`
+
 **Pre-Execution: Initialize Git Repository**:
 - Execute the `spec.git.initialize` sub-agent and wait for it to finish before proceeding.
 - Execute the `spec.git.commit` sub-agent and wait for it to finish before proceeding.

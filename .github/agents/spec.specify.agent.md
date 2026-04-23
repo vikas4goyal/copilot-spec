@@ -20,6 +20,16 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
+**Pre-Execution: Bootstrap Session State** _(must run first)_:
+- Check if `.spec/session.json` exists.
+  - If **missing**: run `.spec/scripts/powershell/manage-session.ps1 -Action init` (PowerShell) or `bash .spec/scripts/bash/manage-session.sh --action init` (Bash) to create it from the template.
+  - If **present**: read and continue.
+- Record this agent: `.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.specify"` (or Bash equivalent).
+- After creating the feature directory (step 3 below), update session paths:
+  ```powershell
+  .spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"feature":{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"},"paths":{"spec_file":"<dir>/spec.md"}}'
+  ```
+
 **Check for extension hooks (before specification)**:
 - Check if `.spec/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_specify` key

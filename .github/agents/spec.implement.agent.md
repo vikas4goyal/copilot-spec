@@ -12,6 +12,13 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
+**Pre-Execution: Bootstrap Session State** _(must run first)_:
+- Check if `.spec/session.json` exists.
+  - If **missing**: run `.spec/scripts/powershell/manage-session.ps1 -Action init` (PowerShell) or `bash .spec/scripts/bash/manage-session.sh --action init` (Bash).
+  - If **present**: read and continue.
+- Record this agent: `.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.implement"` (or Bash equivalent).
+- Update last completed step when done: `.spec/scripts/powershell/manage-session.ps1 -Action update -Field "workflow.last_completed_step" -Value "implementation-complete"`.
+
 **Check for extension hooks (before implementation)**:
 - Check if `.spec/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_implement` key

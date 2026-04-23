@@ -68,3 +68,50 @@ If Git is not installed or the current directory is not a Git repository:
 The script outputs JSON with:
 - `BRANCH_NAME`: The branch name (e.g., `003-user-auth` or `20260319-143022-user-auth`)
 - `FEATURE_NUM`: The numeric or timestamp prefix used
+
+## Session State Update
+
+After the branch has been created successfully, update the active session state with the branch details.
+
+Parse `BRANCH_NAME` and `FEATURE_NUM` from the JSON output above, then run:
+
+**PowerShell:**
+```powershell
+$featureDir = "specs/$branchName"
+.spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch "{
+  \"feature\": {
+    \"branch_name\": \"$branchName\",
+    \"feature_num\": \"$featureNum\",
+    \"feature_dir\": \"$featureDir\"
+  },
+  \"paths\": {
+    \"spec_file\": \"$featureDir/spec.md\"
+  },
+  \"workflow\": {
+    \"last_completed_step\": \"branch-created\"
+  }
+}"
+.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.git.feature"
+```
+
+**Bash:**
+```bash
+feature_dir="specs/$branch_name"
+bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch \
+  "{\"feature\":{\"branch_name\":\"$branch_name\",\"feature_num\":\"$feature_num\",\"feature_dir\":\"$feature_dir\"},\"paths\":{\"spec_file\":\"$feature_dir/spec.md\"},\"workflow\":{\"last_completed_step\":\"branch-created\"}}"
+bash .spec/scripts/bash/manage-session.sh --action add-agent --agent-name "spec.git.feature"
+```
+
+If the session file does not exist (i.e., the feature agent was invoked standalone without going through `spec.constitution`), initialize it first:
+
+**PowerShell:**
+```powershell
+if (-not (Test-Path .spec/session.json)) {
+    .spec/scripts/powershell/manage-session.ps1 -Action init
+}
+```
+
+**Bash:**
+```bash
+[[ -f .spec/session.json ]] || bash .spec/scripts/bash/manage-session.sh --action init
+```
