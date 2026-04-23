@@ -40,9 +40,9 @@ specify       ──────────────────────
  clarify (opt)        plan (req)    checklist (opt)
                          ↓
                        tasks ─────────────────────── required
-                         ↓              ↓        ↓
-                      analyze (opt)  implement  taskstoissues
-                                      (req)       (opt)
+                         ↓              ↓       
+                      analyze (opt)  implement 
+                                      (req)    
 ```
 
 | id              | command                | required | deps               |
@@ -54,7 +54,6 @@ specify       ──────────────────────
 | `checklist`     | `/spec.checklist`      | false    | specify            |
 | `tasks`         | `/spec.tasks`          | true     | plan               |
 | `analyze`       | `/spec.analyze`        | false    | plan, tasks        |
-| `taskstoissues` | `/spec.taskstoissues`  | false    | tasks              |
 | `implement`     | `/spec.implement`      | true     | tasks              |
 
 **Artifact statuses:**
