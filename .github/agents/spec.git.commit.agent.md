@@ -2,15 +2,13 @@
 description: Auto-commit changes after a Spec command completes
 ---
 
-
-
 # Auto-Commit Changes
 
 Automatically stage and commit all changes after a Spec command completes.
 
 ## Behavior
 
-This agent is invoked as a hook after (or before) core Spec commands. It:
+This agent is designed to create meaningful Git commit messages that reflect the actual work done, not just generic file changes. It:
 
 1. Runs `git status --porcelain` to check if there are any pending changes
 2. If there are changes, runs `git diff HEAD` (and `git diff --cached` for staged files) to read the **actual content** of every change
@@ -42,7 +40,7 @@ git diff --cached
 
 #### Medium diff (300 – 1500 changed lines)
 Read file-level stats first, then read only the files most likely to reveal the *intent* of the change.
-Prioritise in this order:
+Prioritize in this order:
 1. Files that are **new** (status `A` / `??`) — new files show what was built
 2. The **largest changed files** by line count — most work happened there
 3. Skip files that are likely auto-generated or noise: `*.lock`, `package-lock.json`, `yarn.lock`, `*.min.js`, `*.min.css`, `dist/`, `build/`, `node_modules/`
@@ -56,7 +54,7 @@ git diff HEAD -- <file>
 Do **not** read full file diffs. Instead:
 1. Run `git diff HEAD --stat` and `git diff HEAD --name-status` to see all changed files and their type (added/modified/deleted)
 2. Group files by directory/module to identify the areas of the codebase affected
-3. Read only the **first 80 lines** of the diff for the 3 most significant files:
+3. Read only the **first 80 lines** of the diff for the 5 most significant files:
    ```
    git diff HEAD -- <file> | head -80
    ```
@@ -146,10 +144,10 @@ fix: resolve null pointer exception in task loader
 ```
 
 ```
-chore: enable auto-commit hook for specify and plan events
+chore: standardize repository bootstrap scripts
 
-- Update git-config.yml to enable after_specify and after_plan hooks
-- Set descriptive default messages per event
+- Align bash and PowerShell initialization flows
+- Add clear logging for setup decisions and early exits
 ```
 
 Bad examples (too generic — avoid):

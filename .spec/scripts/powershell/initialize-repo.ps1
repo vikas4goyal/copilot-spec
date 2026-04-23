@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 function Write-Log {
     param([string]$Message)
-    Write-Host "[spec] $Message"
+    Write-Host "[initialize-repo] $Message"
 }
 
 # Find project root

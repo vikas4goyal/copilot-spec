@@ -21,6 +21,7 @@ The script handles all checks internally:
 - Skips if Git is not available
 - Skips if already inside a Git repository
 - Runs `git init`, `git add .`, and `git commit` with an initial commit message
+- Skip files that are likely auto-generated or noise: `*.lock`, `package-lock.json`, `yarn.lock`, `*.min.js`, `*.min.css`, `dist/`, `build/`, `node_modules/`, `target/`, `.gradle/`, `out/`, `*.class`, `*.jar`, `*.war`, `*.ear`, `.settings/`, `.classpath`, `.project`
 
 ## Customization
 
