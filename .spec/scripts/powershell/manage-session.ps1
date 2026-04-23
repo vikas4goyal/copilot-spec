@@ -3,8 +3,8 @@
 #
 # Usage:
 #   manage-session.ps1 -Action init
-#   manage-session.ps1 -Action update -Field branch_name -Value "001-my-feature"
-#   manage-session.ps1 -Action update-multi -JsonPatch '{"name":"my-feature","branch_name":"001-my-feature","feature_num":"001"}'
+#   manage-session.ps1 -Action update -Field name -Value "oauth2-login-google"
+#   manage-session.ps1 -Action update-multi -JsonPatch '{"name":"oauth2-login-google","description":"Implements OAuth2 login with Google."}'
 #   manage-session.ps1 -Action read
 #   manage-session.ps1 -Action add-agent -AgentName "spec.specify"
 #   manage-session.ps1 -Action complete-artifact -ArtifactId "specify"
@@ -122,11 +122,6 @@ function Initialize-Session {
     $session.updated_at = $now
     $session.status     = 'active'
 
-    # Set branch_name from current git branch or feature name fallback
-    $branch = Get-CurrentBranch
-    if ($branch -and $branch -ne 'main' -and $branch -ne 'HEAD') {
-        $session.branch_name = $branch.Trim()
-    }
 
     $session | ConvertTo-Json -Depth 20 | Set-Content $sessionFile -Encoding UTF8
     Write-Host ('[session] Initialized session at ' + $sessionFile + ' (id: ' + $session.id + ')') -ForegroundColor Green
@@ -290,10 +285,10 @@ function Archive-Session {
     $session     = Read-Session
     $featureName = if ($session.branch_name) { $session.branch_name }
                    elseif ($session.name)    { $session.name }
-                   else { $null }
+                   else                      { $null }
     if ([string]::IsNullOrWhiteSpace($featureName)) {
         $featureName = $session.id
-        Write-Warning '[session] branch_name not set; archiving under session id'
+        Write-Warning '[session] branch_name and name not set; archiving under session id'
     }
     $safeName   = $featureName -replace '[^a-zA-Z0-9\-_.]', '-'
     $archiveDir = Join-Path $repoRoot ".spec/features/$safeName"

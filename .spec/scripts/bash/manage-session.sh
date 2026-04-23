@@ -3,8 +3,8 @@
 #
 # Usage:
 #   manage-session.sh --action init
-#   manage-session.sh --action update --field branch_name --value "001-my-feature"
-#   manage-session.sh --action update-multi --json-patch '{"name":"my-feature","branch_name":"001-my-feature","feature_num":"001"}'
+#   manage-session.sh --action update --field name --value "oauth2-login-google"
+#   manage-session.sh --action update-multi --json-patch '{"name":"oauth2-login-google","description":"Implements OAuth2 login with Google."}'
 #   manage-session.sh --action read
 #   manage-session.sh --action add-agent --agent-name "spec.specify"
 #   manage-session.sh --action complete-artifact --artifact-id "specify"

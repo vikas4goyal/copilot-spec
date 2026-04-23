@@ -1,7 +1,11 @@
 #!/usr/bin/env pwsh
-# create-new-feature.ps1 — Create or switch to the feature branch defined in session.json.
-# Reads branch_name from session.json. If that branch already exists, appends -v1, -v2, ...
-# and updates session.json with the actual name used.
+# create-new-feature.ps1 — Resolves unique branch and folder names from session 'name',
+# creates the git branch and specs/YYYYMMDD-<name>/ directory, then writes branch_name
+# and feature_dir back to session.json.
+#
+# Naming conventions
+#   branch  : <name>  →  <name>-YYYYMMDD  →  <name>-YYYYMMDD-2 …
+#   folder  : YYYYMMDD-<name>  →  YYYYMMDD-<name>-2 …  (date-prefix for dir sorting)
 
 [CmdletBinding()]
 param(
@@ -28,49 +32,72 @@ if (-not $DryRun) { New-Item -ItemType Directory -Path $specsDir -Force | Out-Nu
 
 function log([string]$msg) { Write-Host ('[feature] ' + $msg) -ForegroundColor DarkCyan }
 
-function Test-LocalBranchExists([string]$name) {
-    $ErrorActionPreference = 'Continue'
-    $r = git branch --list $name 2>$null
-    $ErrorActionPreference = 'Stop'
-    return ($null -ne $r -and $r.Trim() -ne '')
-}
-
-function Test-RemoteBranchExists([string]$name) {
-    $ErrorActionPreference = 'Continue'
-    $r = git branch -r --list "*/$name" 2>$null
-    $ErrorActionPreference = 'Stop'
-    return ($null -ne $r -and $r.Trim() -ne '')
-}
-
-function Get-AvailableBranchName([string]$base) {
-    if (-not (Test-LocalBranchExists $base) -and -not (Test-RemoteBranchExists $base)) {
-        return $base
-    }
-    $v = 1
-    while ($true) {
-        $candidate = "$base-v$v"
-        if (-not (Test-LocalBranchExists $candidate) -and -not (Test-RemoteBranchExists $candidate)) {
-            return $candidate
+function Get-UniqueBranchName([string]$base) {
+    # ── Collect all existing branch names that start with $base (once) ───────
+    $taken = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+    if ($hasGit) {
+        $ErrorActionPreference = 'Continue'
+        git branch --list "$base*" 2>$null | ForEach-Object {
+            if ($_) { $taken.Add($_.TrimStart('*', ' ').Trim()) | Out-Null }
         }
-        $v++
+        git branch -r --list "*/$base*" 2>$null | ForEach-Object {
+            if ($_) { $taken.Add(($_.Trim() -split '/')[-1]) | Out-Null }
+        }
+        $ErrorActionPreference = 'Stop'
     }
+
+    # 1. Clean base name — preferred; keeps branch list readable
+    if (-not $taken.Contains($base)) { return $base }
+    # 2. Date suffix — clearly shows when the duplicate was created
+    $ds = Get-Date -Format 'yyyyMMdd'
+    $dc = "$base-$ds"
+    if (-not $taken.Contains($dc)) { return $dc }
+    # 3. Same-day counter
+    $n = 2
+    while ($true) { $c = "$base-$ds-$n"; if (-not $taken.Contains($c)) { return $c }; $n++ }
 }
 
-function Invoke-SessionUpdate([string]$branch) {
+function Get-UniqueFolderName([string]$base) {
+    # Folders are ALWAYS date-prefixed (YYYYMMDD-<name>) so `ls specs/` sorts
+    # chronologically. Collect only dirs that share today's date prefix (once).
+    $ds = Get-Date -Format 'yyyyMMdd'
+    $prefix = "$ds-$base"
+
+    $taken = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase)
+    if (Test-Path $specsDir) {
+        Get-ChildItem -Path $specsDir -Directory -Filter "$prefix*" |
+            ForEach-Object { $taken.Add($_.Name) | Out-Null }
+    }
+
+    # 1. Base date-prefixed name
+    if (-not $taken.Contains($prefix)) { return $prefix }
+    # 2. Counter suffix
+    $n = 2
+    while ($true) { $c = "$prefix-$n"; if (-not $taken.Contains($c)) { return $c }; $n++ }
+}
+
+function Invoke-SessionUpdate([string]$branchName, [string]$folderName) {
     $mgr = Join-Path $repoRoot '.spec/scripts/powershell/manage-session.ps1'
     if (-not (Test-Path $mgr)) { log 'manage-session.ps1 not found — skipping session update'; return }
-    $patch = '{"branch_name":"' + $branch + '","feature_dir":"specs/' + $branch + '"}'
+    $patch = '{"branch_name":"' + $branchName + '","feature_dir":"specs/' + $folderName + '"}'
     $ErrorActionPreference = 'Continue'
     & $mgr -Action update-multi -JsonPatch $patch 2>$null
     $ErrorActionPreference = 'Stop'
-    log ('Session updated: branch_name=' + $branch + '  feature_dir=specs/' + $branch)
+    log ('Session updated: branch_name=' + $branchName + '  feature_dir=specs/' + $folderName)
 }
 
 function Write-Result([string]$branch, [string]$featDir) {
     if ($Json) {
-        [PSCustomObject]@{ BRANCH_NAME = $branch; SPEC_FILE = "$featDir/spec.md" } | ConvertTo-Json -Compress
+        [PSCustomObject]@{
+            BRANCH_NAME = $branch
+            FEATURE_DIR = $featDir
+            SPEC_FILE   = "$featDir/spec.md"
+        } | ConvertTo-Json -Compress
     } else {
         Write-Output "BRANCH_NAME: $branch"
+        Write-Output "FEATURE_DIR: $featDir"
         Write-Output "SPEC_FILE:   $featDir/spec.md"
     }
 }
@@ -84,12 +111,11 @@ if (-not (Test-Path $sessionFile)) {
 try { $sess = Get-Content $sessionFile -Raw | ConvertFrom-Json }
 catch { log 'ERROR: Could not parse session.json'; exit 1 }
 
-$sessionBranch = $sess.branch_name
-if ([string]::IsNullOrWhiteSpace($sessionBranch)) {
-    log 'session.json has no branch_name — populate it before creating a branch'; exit 1
+$baseName = $sess.name
+if ([string]::IsNullOrWhiteSpace($baseName)) {
+    log 'session.json has no name — populate it before creating a feature'; exit 1
 }
-
-log ('Session branch_name: ' + $sessionBranch)
+log ('Session name: ' + $baseName)
 
 # Current git branch
 $currentBranch = $null
@@ -100,28 +126,31 @@ if ($hasGit) {
 }
 log ('Current git branch: ' + ($currentBranch ?? 'none'))
 
-# Already on the correct branch — nothing to do
-if ($currentBranch -eq $sessionBranch) {
-    log ('Already on session branch ' + $sessionBranch + ' — nothing to do')
-    Write-Result $sessionBranch (Join-Path $specsDir $sessionBranch)
-    exit 0
+# ── Early-exit: session already resolved and environment matches ─────────────
+if ($sess.branch_name -and $sess.feature_dir) {
+    $existingDir = Join-Path $repoRoot $sess.feature_dir
+    if ($currentBranch -eq $sess.branch_name -and (Test-Path $existingDir)) {
+        log ('Already on branch ''' + $sess.branch_name + ''' with feature dir ''' + $sess.feature_dir + ''' — nothing to do')
+        Write-Result $sess.branch_name $existingDir
+        exit 0
+    }
 }
 
-# ─── Find an available branch name ──────────────────────────────────────────
+# ─── Fetch remote refs so branch availability check is accurate ─────────────
 if ($hasGit -and -not $DryRun) {
     $ErrorActionPreference = 'Continue'
     git fetch --all --prune 2>$null | Out-Null
     $ErrorActionPreference = 'Stop'
-    $branchName = Get-AvailableBranchName $sessionBranch
-} else {
-    $branchName = $sessionBranch
 }
 
-if ($branchName -ne $sessionBranch) {
-    log ("Branch '$sessionBranch' exists — using '$branchName'")
-}
+# ─── Resolve unique branch name and unique folder name (independent) ─────────
+$branchName = Get-UniqueBranchName $baseName
+$folderName = Get-UniqueFolderName $baseName
 
-$featureDir = Join-Path $specsDir $branchName
+if ($branchName -ne $baseName) { log ("Branch '$baseName' taken — using '$branchName'") }
+log ("Folder name: $folderName")
+
+$featureDir = Join-Path $specsDir $folderName
 $specFile   = Join-Path $featureDir 'spec.md'
 
 # ─── Create branch and spec dir ─────────────────────────────────────────────
@@ -159,9 +188,12 @@ if (-not $DryRun) {
         log ('Spec file already exists: ' + $specFile)
     }
 
-    Invoke-SessionUpdate $branchName
+    Invoke-SessionUpdate $branchName $folderName
 } else {
-    log ('[dry-run] Would create branch ' + $branchName + ' and spec at ' + $specFile)
+    log ('[dry-run] branch_name  → ' + $branchName)
+    log ('[dry-run] feature_dir  → specs/' + $folderName)
+    log ('[dry-run] Would create branch and spec dir, then update session')
 }
 
 Write-Result $branchName $featureDir
+

@@ -1,13 +1,13 @@
 {
   "_schema": "spec-session/2.0",
-  "_description": "Active session state for the current spec workflow. Flat structure — all identity, timing, and feature fields live at root. One file per active flow. Archived to .spec/features/<name>/ by the release agent when the flow completes.",
+  "_description": "Active session state for the current spec workflow. 'name' is the base slug set by the agent. 'branch_name' is the resolved git branch (name or name-YYYYMMDD[-N]). 'feature_dir' is the relative path to the specs folder (specs/YYYYMMDD-name[-N]) — date-prefixed for chronological directory sorting. Archived to .spec/features/<branch_name>/ by the release agent.",
 
   "id": null,
   "name": null,
   "description": null,
   "branch_name": null,
-  "feature_num": null,
   "feature_dir": null,
+  "feature_num": null,
   "schemaName": "spec-driven",
   "isComplete": false,
   "applyRequires": ["tasks"],

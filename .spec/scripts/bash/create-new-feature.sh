@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -e
-# create-new-feature.sh — Create or switch to the feature branch defined in session.json.
-# Reads branch_name from session.json. If that branch already exists, appends -v1, -v2, ...
-# and updates session.json with the actual name used.
+# create-new-feature.sh — Resolves unique branch and folder names from session 'name',
+# creates the git branch and specs/YYYYMMDD-<name>/ directory, then writes branch_name
+# and feature_dir back to session.json.
+#
+# Naming conventions
+#   branch : <name>  →  <name>-YYYYMMDD  →  <name>-YYYYMMDD-2 …
+#   folder : YYYYMMDD-<name>  →  YYYYMMDD-<name>-2 …  (date-prefix for dir sorting)
 
 # ─── Argument parsing ────────────────────────────────────────────────────────
 JSON_MODE=false
@@ -35,51 +39,93 @@ SPECS_DIR="$REPO_ROOT/specs"
 log() { echo "[feature] $*" >&2; }
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
-local_branch_exists() {
-    git branch --list "$1" 2>/dev/null | grep -q .
-}
 
-remote_branch_exists() {
-    git branch -r --list "*/$1" 2>/dev/null | grep -q .
-}
-
-get_available_branch_name() {
+get_unique_branch_name() {
     local base="$1"
-    if ! local_branch_exists "$base" && ! remote_branch_exists "$base"; then
-        echo "$base"; return
+
+    # Collect all existing branch names starting with $base ONCE
+    local taken="" line n
+    if [ "$HAS_GIT" = true ]; then
+        while IFS= read -r line; do
+            n=$(printf '%s' "$line" | sed 's/^[* ]*//' | sed 's/ .*//')
+            [ -n "$n" ] && taken="${taken}${n}"$'\n'
+        done < <(git branch --list "${base}*" 2>/dev/null || true)
+
+        while IFS= read -r line; do
+            n=$(printf '%s' "$line" | sed 's|.*/||' | sed 's/ .*//')
+            [ -n "$n" ] && taken="${taken}${n}"$'\n'
+        done < <(git branch -r --list "*/${base}*" 2>/dev/null || true)
     fi
-    local v=1
+
+    _bt() { printf '%s' "$taken" | grep -qxF -- "$1" 2>/dev/null; }
+
+    # 1. Clean base name — preferred; keeps branch list readable
+    _bt "$base" || { echo "$base"; return; }
+    # 2. Date suffix — clearly shows when the duplicate was created
+    local ds; ds=$(date -u +"%Y%m%d")
+    local dc="${base}-${ds}"
+    _bt "$dc" || { echo "$dc"; return; }
+    # 3. Same-day counter
+    local n=2
     while true; do
-        local candidate="${base}-v${v}"
-        if ! local_branch_exists "$candidate" && ! remote_branch_exists "$candidate"; then
-            echo "$candidate"; return
-        fi
-        v=$((v + 1))
+        local c="${base}-${ds}-${n}"
+        _bt "$c" || { echo "$c"; return; }
+        n=$((n + 1))
+    done
+}
+
+get_unique_folder_name() {
+    local base="$1"
+    # Folders are ALWAYS date-prefixed (YYYYMMDD-<name>) so ls specs/ sorts
+    # chronologically. Collect only dirs sharing today's date prefix (once).
+    local ds; ds=$(date -u +"%Y%m%d")
+    local prefix="${ds}-${base}"
+
+    local taken="" d
+    for d in "$SPECS_DIR"/${prefix}*/; do
+        [ -d "$d" ] || continue
+        local n; n=$(basename "$d")
+        taken="${taken}${n}"$'\n'
+    done
+
+    _ft() { printf '%s' "$taken" | grep -qxF -- "$1" 2>/dev/null; }
+
+    # 1. Base date-prefixed name
+    _ft "$prefix" || { echo "$prefix"; return; }
+    # 2. Counter suffix
+    local n=2
+    while true; do
+        local c="${prefix}-${n}"
+        _ft "$c" || { echo "$c"; return; }
+        n=$((n + 1))
     done
 }
 
 _sync_session() {
-    local branch="$1"
+    local branch_name="$1" folder_name="$2"
     local mgr="$REPO_ROOT/.spec/scripts/bash/manage-session.sh"
     if [ ! -f "$mgr" ]; then
         log "manage-session.sh not found — skipping session update"
         return 0
     fi
-    local patch="{\"branch_name\":\"$branch\",\"feature_dir\":\"specs/$branch\"}"
+    local patch="{\"branch_name\":\"${branch_name}\",\"feature_dir\":\"specs/${folder_name}\"}"
     bash "$mgr" --action update-multi --json-patch "$patch" 2>/dev/null || true
-    log "Session updated: branch_name=$branch  feature_dir=specs/$branch"
+    log "Session updated: branch_name=${branch_name}  feature_dir=specs/${folder_name}"
 }
 
 _output() {
     local branch="$1" feat_dir="$2"
     if $JSON_MODE; then
         if command -v jq >/dev/null 2>&1; then
-            jq -cn --arg b "$branch" --arg s "$feat_dir/spec.md" '{BRANCH_NAME:$b,SPEC_FILE:$s}'
+            jq -cn --arg b "$branch" --arg d "$feat_dir" --arg s "$feat_dir/spec.md" \
+               '{BRANCH_NAME:$b,FEATURE_DIR:$d,SPEC_FILE:$s}'
         else
-            printf '{"BRANCH_NAME":"%s","SPEC_FILE":"%s"}\n' "$branch" "$feat_dir/spec.md"
+            printf '{"BRANCH_NAME":"%s","FEATURE_DIR":"%s","SPEC_FILE":"%s"}\n' \
+                   "$branch" "$feat_dir" "$feat_dir/spec.md"
         fi
     else
         echo "BRANCH_NAME: $branch"
+        echo "FEATURE_DIR: $feat_dir"
         echo "SPEC_FILE:   $feat_dir/spec.md"
     fi
 }
@@ -91,44 +137,50 @@ if [ ! -f "$SESSION_FILE" ]; then
 fi
 
 if command -v jq >/dev/null 2>&1; then
-    SESSION_BRANCH=$(jq -r '.branch_name // empty' "$SESSION_FILE" 2>/dev/null)
+    BASE_NAME=$(jq -r '.name // empty' "$SESSION_FILE" 2>/dev/null)
 elif command -v python3 >/dev/null 2>&1; then
-    SESSION_BRANCH=$(python3 -c \
-        "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('branch_name',''))" \
+    BASE_NAME=$(python3 -c \
+        "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('name',''))" \
         "$SESSION_FILE" 2>/dev/null)
 fi
 
-if [ -z "$SESSION_BRANCH" ]; then
-    log "session.json has no branch_name — populate it before creating a branch"; exit 1
+if [ -z "$BASE_NAME" ]; then
+    log "session.json has no name — populate it before creating a feature"; exit 1
 fi
-
-log "Session branch_name: '$SESSION_BRANCH'"
+log "Session name: '$BASE_NAME'"
 
 # Current git branch
 CURRENT_BRANCH=""
 [ "$HAS_GIT" = true ] && CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 log "Current git branch: '${CURRENT_BRANCH:-none}'"
 
-# Already on the correct branch — nothing to do
-if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" = "$SESSION_BRANCH" ]; then
-    log "Already on session branch '$SESSION_BRANCH' — nothing to do"
-    _output "$SESSION_BRANCH" "$SPECS_DIR/$SESSION_BRANCH"
-    exit 0
+# ── Early-exit: session already resolved and environment matches ─────────────
+if command -v jq >/dev/null 2>&1; then
+    SESS_BRANCH=$(jq -r '.branch_name // empty' "$SESSION_FILE" 2>/dev/null)
+    SESS_FDIR=$(jq -r '.feature_dir // empty'   "$SESSION_FILE" 2>/dev/null)
+fi
+if [ -n "$SESS_BRANCH" ] && [ -n "$SESS_FDIR" ]; then
+    EXISTING_DIR="$REPO_ROOT/$SESS_FDIR"
+    if [ "$CURRENT_BRANCH" = "$SESS_BRANCH" ] && [ -d "$EXISTING_DIR" ]; then
+        log "Already on branch '$SESS_BRANCH' with feature dir '$SESS_FDIR' — nothing to do"
+        _output "$SESS_BRANCH" "$EXISTING_DIR"
+        exit 0
+    fi
 fi
 
-# ─── Find an available branch name ──────────────────────────────────────────
+# ─── Fetch remote refs so branch availability check is accurate ─────────────
 if [ "$HAS_GIT" = true ] && [ "$DRY_RUN" != true ]; then
     git fetch --all --prune >/dev/null 2>&1 || true
-    BRANCH_NAME=$(get_available_branch_name "$SESSION_BRANCH")
-else
-    BRANCH_NAME="$SESSION_BRANCH"
 fi
 
-if [ "$BRANCH_NAME" != "$SESSION_BRANCH" ]; then
-    log "Branch '$SESSION_BRANCH' exists — using '$BRANCH_NAME'"
-fi
+# ─── Resolve unique branch name and unique folder name (independent) ─────────
+BRANCH_NAME=$(get_unique_branch_name "$BASE_NAME")
+FOLDER_NAME=$(get_unique_folder_name "$BASE_NAME")
 
-FEATURE_DIR="$SPECS_DIR/$BRANCH_NAME"
+[ "$BRANCH_NAME" != "$BASE_NAME" ] && log "Branch '$BASE_NAME' taken — using '$BRANCH_NAME'"
+log "Folder name: $FOLDER_NAME"
+
+FEATURE_DIR="$SPECS_DIR/$FOLDER_NAME"
 SPEC_FILE="$FEATURE_DIR/spec.md"
 
 # ─── Create branch and spec dir ─────────────────────────────────────────────
@@ -160,9 +212,12 @@ if [ "$DRY_RUN" != true ]; then
         log "Spec file already exists: $SPEC_FILE"
     fi
 
-    _sync_session "$BRANCH_NAME"
+    _sync_session "$BRANCH_NAME" "$FOLDER_NAME"
 else
-    log "[dry-run] Would create branch '$BRANCH_NAME' and spec at $SPEC_FILE"
+    log "[dry-run] branch_name  → $BRANCH_NAME"
+    log "[dry-run] feature_dir  → specs/$FOLDER_NAME"
+    log "[dry-run] Would create branch and spec dir, then update session"
 fi
 
 _output "$BRANCH_NAME" "$FEATURE_DIR"
+
