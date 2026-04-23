@@ -110,6 +110,27 @@ bash .spec/scripts/bash/manage-session.sh --action init
 
 The `init` action is idempotent — safe to call on every agent startup.
 
+### Branch Creation (part of session init)
+
+After `init`, create the feature branch from `session.json`'s `branch_name`. The script reads the branch name directly from session — no description or slug generation needed. If the branch already exists (locally or remotely), it automatically appends `-v1`, `-v2`, etc. and updates `session.json` with the actual name used.
+
+**PowerShell:**
+```powershell
+.spec/scripts/powershell/create-new-feature.ps1 -Json
+```
+
+**Bash:**
+```bash
+bash .spec/scripts/bash/create-new-feature.sh --json
+```
+
+The script will:
+1. Read `branch_name` from `session.json` — exits with an error if not set
+2. If already on that branch, exit immediately (nothing to do)
+3. Try to create the branch; if it exists, try `branch_name-v1`, `branch_name-v2`, ...
+4. Update `session.json` with the actual `branch_name` and `feature_dir` used
+5. Create the `specs/<branch_name>/` directory and seed `spec.md` from the template
+
 ---
 
 ## Script Reference

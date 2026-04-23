@@ -1,4 +1,0 @@
----
-agent: spec.git.feature
----
-
