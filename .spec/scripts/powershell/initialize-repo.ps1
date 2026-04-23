@@ -66,4 +66,4 @@ try {
     exit 1
 }
 
-Write-Host "✓ Git repository initialized"
+Write-Host "[OK] Git repository initialized"

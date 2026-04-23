@@ -209,10 +209,10 @@ function Get-FeaturePathsEnv {
 function Test-FileExists {
     param([string]$Path, [string]$Description)
     if (Test-Path -Path $Path -PathType Leaf) {
-        Write-Output "  ✓ $Description"
+        Write-Output "  [OK] $Description"
         return $true
     } else {
-        Write-Output "  ✗ $Description"
+        Write-Output "  [FAIL] $Description"
         return $false
     }
 }
@@ -220,10 +220,10 @@ function Test-FileExists {
 function Test-DirHasFiles {
     param([string]$Path, [string]$Description)
     if ((Test-Path -Path $Path -PathType Container) -and (Get-ChildItem -Path $Path -ErrorAction SilentlyContinue | Where-Object { -not $_.PSIsContainer } | Select-Object -First 1)) {
-        Write-Output "  ✓ $Description"
+        Write-Output "  [OK] $Description"
         return $true
     } else {
-        Write-Output "  ✗ $Description"
+        Write-Output "  [FAIL] $Description"
         return $false
     }
 }
