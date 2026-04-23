@@ -10,6 +10,40 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+`$ARGUMENTS` **SHOULD** be a JSON object when called by another agent. Parse it and use the fields to drive execution. Plain-text or empty input is also accepted for interactive use.
+
+### Caller JSON Payload Schema
+
+Agents calling `spec.session.manage` as a post-execution step **MUST** pass a JSON body with at minimum `action` and `artifactId`:
+
+```json
+{
+  "action": "complete",
+  "artifactId": "constitution",
+  "summary": "One-sentence description of what this agent produced.",
+  "handoff": "Key context the next agent needs to continue.",
+  "outputPath": ".spec/memory/constitution.md",
+  "metadata": {}
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `action` | **Yes** | Operation to perform. One of: `complete`, `update`, `skip`, `archive`. |
+| `artifactId` | **Yes** | The artifact id this call targets (e.g. `constitution`, `specify`, `plan`). |
+| `summary` | Recommended | Short human-readable summary of what the calling agent produced. Stored in `artifacts[].summary`. |
+| `handoff` | Recommended | Context string for the next agent. Stored in `artifacts[].handoff` and `pipeline.next_prompt`. |
+| `outputPath` | Optional | Relative path to the primary output file. Stored in `artifacts[].outputPath`. |
+| `metadata` | Optional | Arbitrary agent-specific key/value pairs to attach to the artifact. |
+
+**Action routing:**
+- `complete` → run `post-agent` wrapper (updates `summary`, `handoff`, `outputPath`, marks artifact `complete`)
+- `update` → run `update-artifact` to patch fields without changing status
+- `skip` → run `skip-artifact`
+- `archive` → run `archive` (used by `spec.release` only)
+
+If `$ARGUMENTS` is not valid JSON, fall back to interactive/plain-text interpretation and proceed as before.
+
 ## Purpose
 
 `spec.session.manage` is the active-session lifecycle agent. Use it only after the workflow has been initialized.

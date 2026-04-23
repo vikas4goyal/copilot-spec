@@ -23,10 +23,8 @@ You **MUST** consider the user input before proceeding (if not empty).
 - Execute the `spec.git.commit` sub-agent and wait for it to finish before proceeding.
 
 **Pre-Execution: Bootstrap Session State** _(run after git steps are complete)_:
-- Execute the `spec.session` sub-agent in its normal **start/resume** mode, forwarding the user's `$ARGUMENTS` as high-level context. Wait for it to finish before proceeding.
-  - Do **not** require low-level session action keywords here. `spec.session` is responsible for deciding whether this is a new flow or an existing one.
-  - For a new flow, the session agent initializes `.spec/session.json`, records `spec.constitution` as the running agent, and can derive `name`, `description`, and `branch_name` from the provided arguments.
-  - If a session is **already active** (e.g. this agent was invoked mid-flow from `spec.plan` or `spec.clarify`), the session agent must detect the existing `.spec/session.json`, skip re-initialization, and only append this agent to `pipeline.agents_run` unless the caller explicitly requests metadata changes.
+- Execute the `spec.session.init` sub-agent, forwarding the user's `$ARGUMENTS` as high-level context. Wait for it to finish before proceeding.
+  - The session init agent initializes `.spec/session.json`, records `spec.constitution` as the running agent, and can derive `name`, `description`, and `branch_name` from the provided arguments.
 
 ## Outline
 
@@ -101,3 +99,31 @@ Do not create a new template; always operate on the existing `.spec/memory/const
 
 **Post-Execution: Commit Changes**:
 - Execute the `spec.git.commit` sub-agent and wait for it to finish.
+
+**Post-Execution: Update Session State**:
+- Execute the `spec.session.manage` sub-agent, passing a JSON payload so it knows exactly what to do and what this agent produced. Wait for it to finish.
+
+  Build the payload from the outputs of this run:
+
+  ```json
+  {
+    "action": "complete",
+    "artifactId": "constitution",
+    "summary": "<one-sentence summary, e.g.: 'Constitution amended to v1.2.0: added Observability principle, updated Governance section.'>",
+    "handoff": "<key context for the next agent, e.g.: 'Constitution v1.2.0 ratified. Observability and versioning principles now in effect. Reflect these in spec requirements and plan constraints.'>",
+    "outputPath": ".spec/memory/constitution.md",
+    "metadata": {
+      "constitutionVersion": "<new version, e.g. 1.2.0>",
+      "versionBump": "<major | minor | patch>",
+      "bumpRationale": "<one-line reason for the version bump>",
+      "filesModified": ["<list of files updated, e.g. .spec/memory/constitution.md>"],
+      "principlesAdded": ["<names of any new principles, or empty array>"],
+      "principlesRemoved": ["<names of removed principles, or empty array>"],
+      "principlesRenamed": {"<old name>": "<new name>"},
+      "deferredItems": ["<any TODO placeholders left, or empty array>"]
+    }
+  }
+  ```
+
+  Populate every field from the actual results of this run (version, bump rationale, modified files, etc.). Do not send placeholder text as-is.
+

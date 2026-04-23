@@ -85,24 +85,24 @@ That is the complete execution — no separate `manage-session` calls are needed
 ## Output
 
 ```text
-[feature] Session created: .spec/session.json (id: 20260423-143022-AbCd)
-[feature] Branch 'oauth2-login' created and checked out
-[feature] Spec file created from template: specs/20260423-oauth2-login/spec.md
-[feature] Session updated: branch_name=oauth2-login  feature_dir=specs/20260423-oauth2-login
+[session.init] Session created: .spec/session.json (id: 20260423-143022-AbCd)
+[session.init] Branch 'oauth2-login' created and checked out
+[session.init] Spec file created from template: specs/20260423-oauth2-login/spec.md
+[session.init] Session updated: branch_name=oauth2-login  feature_dir=specs/20260423-oauth2-login
 ```
 
 ### Resume / idempotent output
 
 ```text
-[feature] Session name: 'oauth2-login'
-[feature] Current git branch: 'oauth2-login'
-[feature] Already on branch 'oauth2-login' with feature dir 'specs/20260423-oauth2-login' — nothing to do
+[session.init] Session name: 'oauth2-login'
+[session.init] Current git branch: 'oauth2-login'
+[session.init] Already on branch 'oauth2-login' with feature dir 'specs/20260423-oauth2-login' — nothing to do
 ```
 
 ### Branch mismatch error
 
 ```text
-[feature] ERROR: Session expects branch 'oauth2-login' but the current git branch is 'main'.
-[feature]        Switch to the correct branch  →  git checkout oauth2-login
-[feature]        Or release the current feature first  →  /spec.release
+[session.init] ERROR: Session expects branch 'oauth2-login' but the current git branch is 'main'.
+[session.init]        Switch to the correct branch  →  git checkout oauth2-login
+[session.init]        Or release the current feature first  →  /spec.release
 ```
