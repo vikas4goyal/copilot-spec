@@ -44,10 +44,10 @@ bash .spec/scripts/bash/release-feature.sh
 Pass `-StayOnBranch` / `--stay-on-branch` if the user asked to stay on the feature branch.
 
 The script:
-- Reads `branch_name` and `git.base_branch` from `.spec/session.json`
+- Reads `branch_name` and, if available, any recorded base-branch context from `.spec/session.json`
 - Pushes the branch to `origin` (warns if no remote, continues on push failure)
 - Archives the session via `manage-session` (sets status `completed`, moves to `.spec/features/<name>/session.json`)
-- Switches to `base_branch` unless flagged otherwise
+- Switches back to the base branch when that value is available unless flagged otherwise
 
 ## Graceful Degradation
 

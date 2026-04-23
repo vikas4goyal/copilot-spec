@@ -3,8 +3,8 @@
 #
 # Usage:
 #   manage-session.sh --action init
-#   manage-session.sh --action update --field feature.branch_name --value "001-my-feature"
-#   manage-session.sh --action update-multi --json-patch '{"feature":{"branch_name":"001-x"}}'
+#   manage-session.sh --action update --field branch_name --value "001-my-feature"
+#   manage-session.sh --action update-multi --json-patch '{"name":"my-feature","branch_name":"001-my-feature","feature_num":"001"}'
 #   manage-session.sh --action read
 #   manage-session.sh --action add-agent --agent-name "spec.specify"
 #   manage-session.sh --action complete-artifact --artifact-id "specify"
@@ -68,29 +68,19 @@ initialize_session() {
   fi
   [[ -f "$TEMPLATE_FILE" ]] || { echo "[session] ERROR: Template not found at $TEMPLATE_FILE" >&2; exit 1; }
 
-  local now id base_branch="" remote_url="" repo=""
+  local now id
   now=$(get_now); id=$(new_session_id)
 
-  if command -v git &>/dev/null && git -C "$REPO_ROOT" rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
-    base_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-    remote_url=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || echo "")
-    repo=$(git -C "$REPO_ROOT" rev-parse --show-toplevel 2>/dev/null || echo "")
-  fi
-
   if command -v jq &>/dev/null; then
-    jq --arg id "$id" --arg now "$now" --arg base "$base_branch" \
-       --arg remote "$remote_url" --arg repo_path "$repo" \
-      '.session.id=$id | .session.created_at=$now | .session.updated_at=$now |
-       .session.status="active" | .git.base_branch=$base |
-       .git.remote_url=$remote | .git.repository=$repo_path' \
+    jq --arg id "$id" --arg now "$now" \
+      '.id=$id | .created_at=$now | .updated_at=$now | .status="active"' \
       "$TEMPLATE_FILE" > "$SESSION_FILE"
   else
-    python3 - "$TEMPLATE_FILE" "$SESSION_FILE" "$id" "$now" "$base_branch" "$remote_url" "$repo" <<'PYEOF'
+    python3 - "$TEMPLATE_FILE" "$SESSION_FILE" "$id" "$now" <<'PYEOF'
 import json, sys
-tmpl, dest, sid, now, base, remote, repo = sys.argv[1:]
+tmpl, dest, sid, now = sys.argv[1:]
 with open(tmpl) as f: s = json.load(f)
-s['session'].update(id=sid, created_at=now, updated_at=now, status='active')
-s['git'].update(base_branch=base, remote_url=remote, repository=repo)
+s.update(id=sid, created_at=now, updated_at=now, status='active')
 with open(dest, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
   fi
@@ -108,14 +98,14 @@ update_field() {
 
   if command -v jq &>/dev/null; then
     local tmp; tmp=$(mktemp)
-    # Support two-level dot paths (e.g. feature.name)
+    # Support two-level dot paths (e.g. pipeline.current_agent)
     jq --arg f "$field" --arg v "$value" --arg now "$now" '
       . as $root |
       ($f | split(".")) as $parts |
       if ($parts | length) == 2
       then .[$parts[0]][$parts[1]] = $v
       else .[$parts[0]] = $v end |
-      .session.updated_at = $now
+      .updated_at = $now
     ' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
   else
     python3 - "$SESSION_FILE" "$field" "$value" "$now" <<'PYEOF'
@@ -126,7 +116,7 @@ parts = field_path.split('.')
 obj = s
 for p in parts[:-1]: obj = obj[p]
 obj[parts[-1]] = value
-s['session']['updated_at'] = now
+s['updated_at'] = now
 with open(pf, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
   fi
@@ -146,7 +136,7 @@ add_agent() {
     entry=$(jq -n --arg a "$agent" --arg t "$now" '{"agent":$a,"ran_at":$t}')
     tmp=$(mktemp)
     jq --argjson entry "$entry" --arg a "$agent" --arg now "$now" \
-      '.pipeline.agents_run += [$entry] | .pipeline.current_agent=$a | .session.updated_at=$now' \
+      '.pipeline.agents_run += [$entry] | .pipeline.current_agent=$a | .updated_at=$now' \
       "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
   else
     python3 - "$SESSION_FILE" "$agent" "$now" <<'PYEOF'
@@ -155,7 +145,7 @@ pf, agent, now = sys.argv[1:]
 with open(pf) as f: s = json.load(f)
 s['pipeline']['agents_run'].append({'agent': agent, 'ran_at': now})
 s['pipeline']['current_agent'] = agent
-s['session']['updated_at'] = now
+s['updated_at'] = now
 with open(pf, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
   fi
@@ -178,14 +168,14 @@ complete_artifact() {
       # complete the target artifact
       (.artifacts[] | select(.id == $id)) |= (.status = "complete" | .completedAt = $now) |
       # cascade: remove $id from every artifact missingDeps; unblock if now empty
-      (.artifacts[] | select(.missingDeps | (. != null and contains([$id])))) |=
-        (.missingDeps -= [$id] |
-         if (.missingDeps | length) == 0 and .status == "pending" then .status = "ready" else . end) |
-      .pipeline.last_completed = $id |
-      .pipeline.current_agent  = null |
-      .isComplete = ([.artifacts[] | select(.required == true) |
-                      select(.status != "complete" and .status != "skipped")] | length == 0) |
-      .session.updated_at = $now
+       (.artifacts[] | select(.missingDeps | (. != null and contains([$id])))) |=
+         (.missingDeps -= [$id] |
+          if (.missingDeps | length) == 0 and .status == "pending" then .status = "ready" else . end) |
+       .pipeline.last_completed = $id |
+       .pipeline.current_agent  = null |
+       .isComplete = ([.artifacts[] | select(.required == true) |
+                       select(.status != "complete" and .status != "skipped")] | length == 0) |
+       .updated_at = $now
     ' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
 
     # Step 2: propagate handoff → next_prompt
@@ -236,8 +226,7 @@ s['pipeline']['next_recommended'] = nxt['command'] if nxt else None
 
 req_pending = [a for a in s['artifacts'] if a.get('required') and a['status'] not in ('complete','skipped')]
 s['isComplete'] = len(req_pending) == 0
-if s['feature'].get('name'): s['changeName'] = s['feature']['name']
-s['session']['updated_at'] = now
+s['updated_at'] = now
 with open(pf, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
   fi
@@ -259,7 +248,7 @@ update_artifact() {
     local tmp; tmp=$(mktemp)
     jq --arg id "$id" --arg f "$field" --arg v "$value" --arg now "$now" '
       (.artifacts[] | select(.id==$id)) |= (.[$f] = $v) |
-      .session.updated_at = $now
+      .updated_at = $now
     ' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
   else
     python3 - "$SESSION_FILE" "$id" "$field" "$value" "$now" <<'PYEOF'
@@ -268,7 +257,7 @@ pf, art_id, field, value, now = sys.argv[1:]
 with open(pf) as f: s = json.load(f)
 for a in s['artifacts']:
     if a['id'] == art_id: a[field] = value; break
-s['session']['updated_at'] = now
+s['updated_at'] = now
 with open(pf, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
   fi
@@ -287,13 +276,13 @@ skip_artifact() {
     local tmp; tmp=$(mktemp)
     jq --arg id "$id" --arg now "$now" '
       (.artifacts[] | select(.id == $id)) |= (.status = "skipped" | .completedAt = $now) |
-      (.artifacts[] | select(.missingDeps | (. != null and contains([$id])))) |=
-        (.missingDeps -= [$id] |
-         if (.missingDeps | length) == 0 and .status == "pending" then .status = "ready" else . end) |
-      .pipeline.last_completed = $id |
-      .isComplete = ([.artifacts[] | select(.required==true) |
-                      select(.status!="complete" and .status!="skipped")] | length == 0) |
-      .session.updated_at = $now
+       (.artifacts[] | select(.missingDeps | (. != null and contains([$id])))) |=
+         (.missingDeps -= [$id] |
+          if (.missingDeps | length) == 0 and .status == "pending" then .status = "ready" else . end) |
+       .pipeline.last_completed = $id |
+       .isComplete = ([.artifacts[] | select(.required==true) |
+                       select(.status!="complete" and .status!="skipped")] | length == 0) |
+       .updated_at = $now
     ' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
 
     local next_cmd
@@ -321,7 +310,7 @@ nxt = next((a for a in s['artifacts'] if a['status']=='ready' and a['id']!=art_i
 s['pipeline']['next_recommended'] = nxt['command'] if nxt else None
 req_pending = [a for a in s['artifacts'] if a.get('required') and a['status'] not in ('complete','skipped')]
 s['isComplete'] = len(req_pending) == 0
-s['session']['updated_at'] = now
+s['updated_at'] = now
 with open(pf, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
   fi
@@ -375,10 +364,9 @@ archive_session() {
   now=$(get_now)
 
   if command -v jq &>/dev/null; then
-    feature_name=$(jq -r '.feature.branch_name // empty' "$SESSION_FILE")
-    [[ -z "$feature_name" ]] && feature_name=$(jq -r '.session.id' "$SESSION_FILE")
+    feature_name=$(jq -r '.branch_name // .name // .id // empty' "$SESSION_FILE")
   else
-    feature_name=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d['feature'].get('branch_name') or d['session']['id'])")
+    feature_name=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d.get('branch_name') or d.get('name') or d.get('id') or '')")
   fi
 
   safe_name="${feature_name//[^a-zA-Z0-9\-_.]/-}"
@@ -387,8 +375,17 @@ archive_session() {
 
   if command -v jq &>/dev/null; then
     local tmp; tmp=$(mktemp)
-    jq --arg now "$now" '.session.status="completed" | .session.updated_at=$now' \
+    jq --arg now "$now" '.status="completed" | .updated_at=$now' \
       "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
+  else
+    python3 - "$SESSION_FILE" "$now" <<'PYEOF'
+import json, sys
+pf, now = sys.argv[1:]
+with open(pf) as f: s = json.load(f)
+s['status'] = 'completed'
+s['updated_at'] = now
+with open(pf, 'w') as f: json.dump(s, f, indent=2)
+PYEOF
   fi
 
   mv "$SESSION_FILE" "$archive_dir/session.json"
@@ -409,7 +406,7 @@ case "$ACTION" in
     if command -v jq &>/dev/null; then
       tmp=$(mktemp); now=$(get_now)
       jq --argjson patch "$JSON_PATCH" --arg now "$now" \
-        '. * $patch | .session.updated_at=$now' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
+        '. * $patch | .updated_at=$now' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
     else
       python3 - "$SESSION_FILE" "$JSON_PATCH" "$( get_now )" <<'PYEOF'
 import json, sys
@@ -421,7 +418,7 @@ def deep_merge(base, overlay):
         if isinstance(v, dict) and isinstance(base.get(k), dict): deep_merge(base[k], v)
         else: base[k] = v
 deep_merge(s, patch)
-s['session']['updated_at'] = now
+s['updated_at'] = now
 with open(pf, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
     fi

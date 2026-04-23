@@ -23,9 +23,10 @@ You **MUST** consider the user input before proceeding (if not empty).
 - Execute the `spec.git.commit` sub-agent and wait for it to finish before proceeding.
 
 **Pre-Execution: Bootstrap Session State** _(run after git steps are complete)_:
-- Execute the `spec.session` sub-agent, forwarding the user's `$ARGUMENTS` as its input. Wait for it to finish before proceeding.
-  - The session agent handles everything in one call: initializing the session if not already active, recording `spec.constitution` as the running agent, and deriving `name` and `branch_name` from the provided arguments.
-  - If a session is **already active** (e.g. this agent was invoked mid-flow from `spec.plan` or `spec.clarify`), the session agent will detect the existing `.spec/session.json`, skip re-initialization, and only append this agent to `pipeline.agents_run` — no existing session data is overwritten.
+- Execute the `spec.session` sub-agent in its normal **start/resume** mode, forwarding the user's `$ARGUMENTS` as high-level context. Wait for it to finish before proceeding.
+  - Do **not** require low-level session action keywords here. `spec.session` is responsible for deciding whether this is a new flow or an existing one.
+  - For a new flow, the session agent initializes `.spec/session.json`, records `spec.constitution` as the running agent, and can derive `name`, `description`, and `branch_name` from the provided arguments.
+  - If a session is **already active** (e.g. this agent was invoked mid-flow from `spec.plan` or `spec.clarify`), the session agent must detect the existing `.spec/session.json`, skip re-initialization, and only append this agent to `pipeline.agents_run` unless the caller explicitly requests metadata changes.
 
 ## Outline
 

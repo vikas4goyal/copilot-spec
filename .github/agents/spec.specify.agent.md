@@ -30,9 +30,14 @@ _(run in order, every time)_
 
    The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
-   After creating the feature directory (Outline step 3 below), update the session with the resolved paths:
+   After creating the feature directory (Outline step 3 below), update the session with the resolved metadata and output path:
    ```powershell
-   .spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"feature":{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"},"paths":{"spec_file":"<dir>/spec.md"}}'
+   .spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
+   .spec/scripts/powershell/manage-session.ps1 -Action update-artifact -ArtifactId specify -ArtifactField outputPath -ArtifactValue "<dir>/spec.md"
+   ```
+   ```bash
+   bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
+   bash .spec/scripts/bash/manage-session.sh --action update-artifact --artifact-id specify --artifact-field outputPath --artifact-value "<dir>/spec.md"
    ```
 
 ## Outline
