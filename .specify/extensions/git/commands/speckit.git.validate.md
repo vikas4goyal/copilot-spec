@@ -1,10 +1,7 @@
 ---
-description: Validate current branch follows feature branch naming conventions
+description: "Validate current branch follows feature branch naming conventions"
 ---
 
-
-<!-- Extension: git -->
-<!-- Config: .specify/extensions/git/ -->
 # Validate Feature Branch
 
 Validate that the current Git branch follows the expected feature branch naming conventions.
@@ -35,8 +32,8 @@ The branch name must match one of these patterns:
 If on a feature branch (matches either pattern):
 - Output: `✓ On feature branch: <branch-name>`
 - Check if the corresponding spec directory exists under `specs/`:
-    - For sequential branches, look for `specs/<prefix>-*` where prefix matches the numeric portion
-    - For timestamp branches, look for `specs/<prefix>-*` where prefix matches the `YYYYMMDD-HHMMSS` portion
+  - For sequential branches, look for `specs/<prefix>-*` where prefix matches the numeric portion
+  - For timestamp branches, look for `specs/<prefix>-*` where prefix matches the `YYYYMMDD-HHMMSS` portion
 - If spec directory exists: `✓ Spec directory found: <path>`
 - If spec directory missing: `⚠ No spec directory found for prefix <prefix>`
 
