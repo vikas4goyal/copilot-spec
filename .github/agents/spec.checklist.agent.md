@@ -33,13 +33,15 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
-**Check for extension hooks (before checklist generation)**:
+_(run in order, every time)_
 
-Run and display any output from:
-- **PowerShell**: `.spec/scripts/powershell/check-hooks.ps1 -Event before_checklist`
-- **Bash**: `bash .spec/scripts/bash/check-hooks.sh --event before_checklist`
+1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
+2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
+3. **Start Session Step** — Run the pre-agent script:
+   - **PowerShell**: `.spec/scripts/powershell/pre-agent.ps1 -AgentName spec.checklist -ArtifactId checklist`
+   - **Bash**: `bash .spec/scripts/bash/pre-agent.sh --agent-name spec.checklist --artifact-id checklist`
 
-The script outputs formatted hook blocks for executable hooks; silent if none. For **mandatory** hooks (non-optional), wait for the hook command to complete before proceeding. For **optional** hooks, present them to the user and proceed with the Execution Steps.
+   The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Execution Steps
 
@@ -306,5 +308,12 @@ Sample items:
 
 ## Post-Execution Checks
 
-**Post-Execution: Commit Changes**:
-- Execute the `spec.git.commit` sub-agent and wait for it to finish.
+_(run in order, after the main Execution Steps complete)_
+
+1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
+   - **PowerShell**: `.spec/scripts/powershell/post-agent.ps1 -ArtifactId checklist -Summary "..." -Handoff "..."`
+   - **Bash**: `bash .spec/scripts/bash/post-agent.sh --artifact-id checklist --summary "..." --handoff "..."`
+
+   Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
+
+2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.

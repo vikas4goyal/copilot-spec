@@ -12,20 +12,15 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
-**Pre-Execution: Bootstrap Session State** _(must run first)_:
-- Check if `.spec/session.json` exists.
-  - If **missing**: run `.spec/scripts/powershell/manage-session.ps1 -Action init` (PowerShell) or `bash .spec/scripts/bash/manage-session.sh --action init` (Bash).
-  - If **present**: read and continue.
-- Record this agent: `.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.implement"` (or Bash equivalent).
-- Update last completed step when done: `.spec/scripts/powershell/manage-session.ps1 -Action update -Field "workflow.last_completed_step" -Value "implementation-complete"`.
+_(run in order, every time)_
 
-**Check for extension hooks (before implementation)**:
+1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
+2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
+3. **Start Session Step** — Run the pre-agent script:
+   - **PowerShell**: `.spec/scripts/powershell/pre-agent.ps1 -AgentName spec.implement -ArtifactId implement`
+   - **Bash**: `bash .spec/scripts/bash/pre-agent.sh --agent-name spec.implement --artifact-id implement`
 
-Run and display any output from:
-- **PowerShell**: `.spec/scripts/powershell/check-hooks.ps1 -Event before_implement`
-- **Bash**: `bash .spec/scripts/bash/check-hooks.sh --event before_implement`
-
-The script outputs formatted hook blocks for executable hooks; silent if none. For **mandatory** hooks (non-optional), wait for the hook command to complete before proceeding. For **optional** hooks, present them to the user and proceed with the Outline.
+   The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Outline
 
@@ -151,4 +146,14 @@ The script outputs formatted hook blocks for executable hooks; silent if none. F
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/spec.tasks` first to regenerate the task list.
 
-10. **Commit Changes**: Execute the `spec.git.commit` sub-agent and wait for it to finish.
+## Post-Execution Checks
+
+_(run in order, after the main Outline completes)_
+
+1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
+   - **PowerShell**: `.spec/scripts/powershell/post-agent.ps1 -ArtifactId implement -Summary "..." -Handoff "..."`
+   - **Bash**: `bash .spec/scripts/bash/post-agent.sh --artifact-id implement --summary "..." --handoff "..."`
+
+   Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
+
+2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.
