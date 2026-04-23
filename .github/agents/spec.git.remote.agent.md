@@ -2,46 +2,27 @@
 description: Detect Git remote URL for GitHub integration
 ---
 
-
-
 # Detect Git Remote URL
 
-Detect the Git remote URL for integration with GitHub services (e.g., issue creation).
+Run the appropriate script from the project root:
 
-## Prerequisites
-
-- Check if Git is available by running `git rev-parse --is-inside-work-tree 2>/dev/null`
-- If Git is not available, output a warning and return empty:
-  ```
-  [specify] Warning: Git repository not detected; cannot determine remote URL
-  ```
-
-## Execution
-
-Run the following command to get the remote URL:
-
-```bash
-git config --get remote.origin.url
+**PowerShell:**
+```powershell
+.spec/scripts/powershell/detect-remote.ps1
 ```
 
-## Output
+**Bash:**
+```bash
+bash .spec/scripts/bash/detect-remote.sh
+```
 
-Parse the remote URL and determine:
-
-1. **Repository owner**: Extract from the URL (e.g., `github` from `https://github.com/github/spec-kit.git`)
-2. **Repository name**: Extract from the URL (e.g., `spec-kit` from `https://github.com/github/spec-kit.git`)
-3. **Is GitHub**: Whether the remote points to a GitHub repository
-
-Supported URL formats:
-- HTTPS: `https://github.com/<owner>/<repo>.git`
-- SSH: `git@github.com:<owner>/<repo>.git`
-
-> [!CAUTION]
-> ONLY report a GitHub repository if the remote URL actually points to github.com.
-> Do NOT assume the remote is GitHub if the URL format doesn't match.
+Use `--json` / `-Json` to get machine-readable output:
+```json
+{"has_remote":true,"is_github":true,"remote_url":"https://github.com/owner/repo.git","owner":"owner","repo":"repo"}
+```
 
 ## Graceful Degradation
 
-If Git is not installed, the directory is not a Git repository, or no remote is configured:
-- Return an empty result
-- Do NOT error — other workflows should continue without Git remote information
+Always exits `0`. Returns `has_remote: false` when Git is not available, not inside a repo, or no `remote.origin` is configured. Never error — callers continue without remote information.
+
+> **CAUTION**: Only report `is_github: true` when the URL actually points to `github.com`. Do NOT assume GitHub from URL format alone.
