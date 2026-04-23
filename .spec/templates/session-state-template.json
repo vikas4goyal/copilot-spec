@@ -129,19 +129,6 @@
       "completedAt": null
     },
     {
-      "id": "taskstoissues",
-      "command": "/spec.taskstoissues",
-      "label": "GitHub Issues Export",
-      "outputPath": null,
-      "status": "pending",
-      "required": false,
-      "deps": ["tasks"],
-      "missingDeps": ["tasks"],
-      "summary": null,
-      "handoff": null,
-      "completedAt": null
-    },
-    {
       "id": "implement",
       "command": "/spec.implement",
       "label": "Implementation",
