@@ -9,29 +9,85 @@ $ARGUMENTS
 ```
 
 You **MUST** consider the user input before proceeding (if not empty).
-Supported actions passed as arguments: `init`, `update`, `add-agent <name>`, `archive`, `read`.
+Supported actions passed as arguments: `init`, `update`, `add-agent <name>`, `complete-artifact <id>`, `update-artifact <id> <field> <value>`, `skip-artifact <id>`, `check-deps <id>`, `archive`, `read`.
 If no action is specified, default to `init`.
 
 ## Purpose
 
-The session state file (`.spec/session.json`) is the **single source of truth** for the current active spec workflow. It tracks:
+The session state file (`.spec/session.json`) is the **single source of truth** for the current active spec workflow. It serves two roles simultaneously:
 
-- The active feature branch name and feature number
-- The feature directory path
-- Which agents have run and when
-- Git details (base branch, remote, repository)
-- Paths to generated artifacts (spec, plan, tasks)
-- Flow status (`active` → `completed`)
+1. **Session metadata** — feature name, git branch, feature directory, which agents ran and when.
+2. **Artifact pipeline graph** — every command in the workflow is an artifact node with its dependency list, live status, agent summary, and handoff prompt to the next agent.
 
-There is **always at most one** `.spec/session.json` file. Once a flow is complete, the `spec.release` agent archives it to `.spec/features/<feature-name>/session.json`.
+Together these let any agent answer three questions without human input:
+- "What has already been done?" → read `artifacts[*].status` and `artifacts[*].summary`
+- "Am I allowed to run yet?" → read `artifacts[<my-id>].missingDeps`
+- "What should I tell the next agent?" → write `artifacts[<my-id>].handoff` then call `complete-artifact`
 
-## Pre-Requisite Check (Bootstrap Logic)
+There is **always at most one** `.spec/session.json`. Once a flow is complete the `spec.release` agent archives it to `.spec/features/<feature-name>/session.json`.
 
-**Every spec agent should run this check before any other work:**
+---
 
-1. Check if `.spec/session.json` exists.
-2. If **missing**: copy `.spec/templates/session-state-template.json` → `.spec/session.json` and initialize it (the script does this automatically on `init`).
-3. If **present**: read it and continue — do not overwrite.
+## Artifact Pipeline — Dependency Map
+
+The `artifacts` array encodes the complete workflow graph:
+
+```
+constitution  (independent, optional)
+     ↓ (recommended, not required)
+specify       ──────────────────────────────── required
+     ↓                   ↓              ↓
+ clarify (opt)        plan (req)    checklist (opt)
+                         ↓
+                       tasks ─────────────────────── required
+                         ↓              ↓        ↓
+                      analyze (opt)  implement  taskstoissues
+                                      (req)       (opt)
+```
+
+| id              | command                | required | deps               |
+|-----------------|------------------------|----------|--------------------|
+| `constitution`  | `/spec.constitution`   | false    | —                  |
+| `specify`       | `/spec.specify`        | true     | —                  |
+| `clarify`       | `/spec.clarify`        | false    | specify            |
+| `plan`          | `/spec.plan`           | true     | specify            |
+| `checklist`     | `/spec.checklist`      | false    | specify            |
+| `tasks`         | `/spec.tasks`          | true     | plan               |
+| `analyze`       | `/spec.analyze`        | false    | plan, tasks        |
+| `taskstoissues` | `/spec.taskstoissues`  | false    | tasks              |
+| `implement`     | `/spec.implement`      | true     | tasks              |
+
+**Artifact statuses:**
+- `ready` — dependencies met, can run now
+- `pending` — waiting for one or more `missingDeps` to complete
+- `in_progress` — currently executing (set manually by agent on start)
+- `complete` — finished successfully
+- `skipped` — explicitly bypassed (dependents are still unblocked)
+
+---
+
+## Pre-Requisite Bootstrap (every agent must do this first)
+
+```powershell
+# 1. Ensure session exists
+.spec/scripts/powershell/manage-session.ps1 -Action init
+
+# 2. Record that this agent is running
+.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.<agent-name>"
+
+# 3. Check that prerequisites are met before doing any work
+.spec/scripts/powershell/manage-session.ps1 -Action check-deps -ArtifactId "<my-artifact-id>"
+```
+
+```bash
+bash .spec/scripts/bash/manage-session.sh --action init
+bash .spec/scripts/bash/manage-session.sh --action add-agent --agent-name "spec.<agent-name>"
+bash .spec/scripts/bash/manage-session.sh --action check-deps --artifact-id "<my-artifact-id>"
+```
+
+If `check-deps` reports missing dependencies, **stop and tell the user** what to run first (e.g. "You need to run `/spec.plan` before `/spec.tasks`").
+
+---
 
 ## Execution
 
@@ -47,122 +103,266 @@ Run the appropriate script from the repo root:
 bash .spec/scripts/bash/manage-session.sh --action init
 ```
 
-The `init` action is idempotent — safe to call on every agent startup. It only creates the file if it does not already exist.
+The `init` action is idempotent — safe to call on every agent startup.
 
-## Updating Session Fields
+---
 
-After completing an action that produces new data (e.g., a branch was created), update the session:
+## Script Reference
 
-**PowerShell — update a single field:**
+### `init`
+Creates `.spec/session.json` from the template with a new session ID and detected git context. No-op if file already exists.
+
+### `read`
+Prints the current session JSON to stdout.
+
+### `add-agent` — record agent execution
+```powershell
+.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.plan"
+```
+```bash
+bash .spec/scripts/bash/manage-session.sh --action add-agent --agent-name "spec.plan"
+```
+Appends to `pipeline.agents_run` and sets `pipeline.current_agent`.
+
+### `update` — set a single session field
 ```powershell
 .spec/scripts/powershell/manage-session.ps1 -Action update -Field "feature.branch_name" -Value "001-my-feature"
 ```
-
-**PowerShell — update multiple fields atomically:**
-```powershell
-.spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"feature":{"branch_name":"001-my-feature","feature_num":"001","feature_dir":"specs/001-my-feature"}}'
-```
-
-**Bash equivalents use `--field`/`--value` or `--json-patch` flags:**
 ```bash
 bash .spec/scripts/bash/manage-session.sh --action update --field feature.branch_name --value "001-my-feature"
-bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch '{"feature":{"branch_name":"001-my-feature"}}'
 ```
 
-## Recording Agent Execution
-
-After the session is initialized, record that the current agent has run:
-
-**PowerShell:**
+### `update-multi` — set multiple session fields atomically
 ```powershell
-.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.<agent-name>"
+.spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"feature":{"name":"modern-register-ui","branch_name":"001-modern-register-ui","feature_dir":"specs/001-modern-register-ui"},"changeName":"modern-register-ui"}'
+```
+```bash
+bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch '{"feature":{"name":"modern-register-ui"}}'
 ```
 
-**Bash:**
-```bash
-bash .spec/scripts/bash/manage-session.sh --action add-agent --agent-name "spec.<agent-name>"
+### `update-artifact` — write summary or handoff (call before `complete-artifact`)
+
+**Write what this agent produced** (other agents read this as context):
+```powershell
+.spec/scripts/powershell/manage-session.ps1 -Action update-artifact `
+  -ArtifactId "specify" `
+  -ArtifactField "summary" `
+  -ArtifactValue "Defined registration UI spec. 3 user flows, 12 requirements. OAuth2 provider TBD."
 ```
+
+**Write the handoff prompt for the next agent** (becomes `pipeline.next_prompt` after `complete-artifact`):
+```powershell
+.spec/scripts/powershell/manage-session.ps1 -Action update-artifact `
+  -ArtifactId "specify" `
+  -ArtifactField "handoff" `
+  -ArtifactValue "Building a modern registration UI. OAuth2 login, email/password fallback, mobile-first. Tech stack: React + TypeScript + Node.js. Key constraint: must integrate with existing auth-service API."
+```
+
+```bash
+bash .spec/scripts/bash/manage-session.sh --action update-artifact \
+  --artifact-id "specify" --artifact-field "summary" \
+  --artifact-value "Defined registration UI spec. OAuth2 required, mobile-first."
+bash .spec/scripts/bash/manage-session.sh --action update-artifact \
+  --artifact-id "specify" --artifact-field "handoff" \
+  --artifact-value "React + TypeScript, OAuth2, mobile-first registration flow."
+```
+
+Valid `--artifact-field` values: `summary`, `handoff`, `status`, `outputPath`.
+
+### `complete-artifact` — mark done, cascade unblocking, set next step
+Call this **after** writing summary and handoff. It:
+1. Sets `artifacts[id].status = "complete"` and stamps `completedAt`
+2. Removes `id` from `missingDeps` of every downstream artifact; sets them `ready` when unblocked
+3. Copies `handoff` → `pipeline.next_prompt`
+4. Computes `pipeline.next_recommended` (first ready required artifact, else first ready artifact)
+5. Recalculates `isComplete`
+
+```powershell
+.spec/scripts/powershell/manage-session.ps1 -Action complete-artifact -ArtifactId "specify"
+```
+```bash
+bash .spec/scripts/bash/manage-session.sh --action complete-artifact --artifact-id "specify"
+```
+
+### `skip-artifact` — bypass an optional step
+Marks the artifact `skipped` and cascades the same unblocking as `complete-artifact`. Warns if the artifact is `required`.
+```powershell
+.spec/scripts/powershell/manage-session.ps1 -Action skip-artifact -ArtifactId "clarify"
+```
+```bash
+bash .spec/scripts/bash/manage-session.sh --action skip-artifact --artifact-id "clarify"
+```
+
+### `check-deps` — verify prerequisites before running
+```powershell
+.spec/scripts/powershell/manage-session.ps1 -Action check-deps -ArtifactId "tasks"
+```
+```bash
+bash .spec/scripts/bash/manage-session.sh --action check-deps --artifact-id "tasks"
+```
+Output if blocked:
+```
+[session] 'tasks' is blocked. Missing dependencies:
+  → Run /spec.plan first  (id: plan)
+```
+
+### `archive`
+Marks the session `completed` and moves `.spec/session.json` to `.spec/features/<branch-name>/session.json`.
+
+---
+
+## Agent Lifecycle Pattern
+
+Every spec agent follows this exact pattern:
+
+```
+1. init          → ensure session exists
+2. add-agent     → record this agent started
+3. check-deps    → verify prerequisites; abort with guidance if blocked
+4. [do work]
+5. update-artifact <id> summary "<what was produced>"
+6. update-artifact <id> handoff "<context for the next agent>"
+7. complete-artifact <id>   → cascades unblocking + sets pipeline.next_recommended
+```
+
+Agents should also read context from previously completed artifacts before starting:
+```powershell
+$session = Get-Content .spec/session.json -Raw | ConvertFrom-Json
+
+# Read what specify produced
+$specSummary = ($session.artifacts | Where-Object { $_.id -eq 'specify' }).summary
+
+# Read handoff from the previous step
+$handoff = $session.pipeline.next_prompt
+```
+```bash
+spec_summary=$(jq -r '.artifacts[] | select(.id=="specify") | .summary' .spec/session.json)
+handoff=$(jq -r '.pipeline.next_prompt // empty' .spec/session.json)
+```
+
+---
 
 ## Reading Session State
 
-To read the current session and use its data in subsequent steps:
-
-**PowerShell:**
 ```powershell
 $session = Get-Content .spec/session.json -Raw | ConvertFrom-Json
-$branchName = $session.feature.branch_name
-```
 
-**Bash:**
+# Navigation examples
+$session.changeName                    # feature name (kept in sync with feature.name)
+$session.pipeline.next_recommended     # e.g. "/spec.plan"
+$session.pipeline.next_prompt          # handoff prompt from last completed agent
+$session.isComplete                    # true when all required artifacts are done
+
+# Find a specific artifact
+$planArtifact = $session.artifacts | Where-Object { $_.id -eq 'plan' }
+$planArtifact.status                   # ready / pending / complete / skipped
+$planArtifact.missingDeps              # [] when ready
+$planArtifact.summary                  # what spec.plan produced
+```
 ```bash
-branch_name=$(jq -r '.feature.branch_name' .spec/session.json)
+jq -r '.pipeline.next_recommended'     .spec/session.json
+jq -r '.pipeline.next_prompt'          .spec/session.json
+jq -r '.isComplete'                    .spec/session.json
+jq -r '.artifacts[] | select(.id=="plan") | .status'   .spec/session.json
+jq -r '.artifacts[] | select(.id=="plan") | .summary'  .spec/session.json
 ```
 
-## Session JSON Schema
+---
 
-The file lives at `.spec/session.json` and follows this structure (see `.spec/templates/session-state-template.json` for the full template):
+## Session JSON Schema (v2.0)
 
 ```json
 {
-  "_schema": "spec-session/1.0",
+  "_schema": "spec-session/2.0",
+  "changeName": "modern-register-ui",
+  "schemaName": "spec-driven",
+  "isComplete": false,
+  "applyRequires": ["tasks"],
+
   "session": {
     "id": "20260423-143022-AbCd",
     "created_at": "2026-04-23T14:30:22Z",
-    "updated_at": "2026-04-23T14:35:10Z",
+    "updated_at": "2026-04-23T14:45:10Z",
     "status": "active"
   },
+
   "feature": {
-    "name": "User Authentication",
-    "description": "Add OAuth2-based login flow",
-    "branch_name": "001-user-auth",
+    "name": "modern-register-ui",
+    "description": "Redesign the registration UI with OAuth2 and mobile-first layout",
+    "branch_name": "001-modern-register-ui",
     "feature_num": "001",
-    "feature_dir": "specs/001-user-auth"
+    "feature_dir": "specs/001-modern-register-ui"
   },
+
   "git": {
     "base_branch": "develop",
     "remote_url": "https://github.com/org/repo.git",
     "repository": "/path/to/repo"
   },
-  "workflow": {
-    "initiated_by": "spec.constitution",
+
+  "pipeline": {
+    "current_agent": "spec.plan",
+    "last_completed": "specify",
+    "next_recommended": "/spec.plan",
+    "next_prompt": "Building a modern registration UI. OAuth2 login, email/password fallback, mobile-first. React + TypeScript + Node.js. Must integrate with existing auth-service API.",
     "agents_run": [
-      { "agent": "spec.constitution", "ran_at": "2026-04-23T14:30:22Z" },
-      { "agent": "spec.git.feature", "ran_at": "2026-04-23T14:31:00Z" }
-    ],
-    "current_agent": "spec.git.feature",
-    "last_completed_step": "branch-created"
+      { "agent": "spec.specify", "ran_at": "2026-04-23T14:30:22Z" }
+    ]
   },
-  "paths": {
-    "spec_file": "specs/001-user-auth/spec.md",
-    "plan_file": "specs/001-user-auth/plan.md",
-    "tasks_file": "specs/001-user-auth/tasks.md",
-    "checklist_file": "specs/001-user-auth/checklist.md"
-  },
-  "metadata": {
-    "project_name": "MyApp",
-    "tags": [],
-    "notes": null
-  }
+
+  "artifacts": [
+    {
+      "id": "specify",
+      "command": "/spec.specify",
+      "label": "Feature Specification",
+      "outputPath": "specs/001-modern-register-ui/spec.md",
+      "status": "complete",
+      "required": true,
+      "deps": [],
+      "missingDeps": [],
+      "summary": "Defined registration UI spec. 3 user flows, 12 functional requirements. OAuth2 + email/password auth.",
+      "handoff": "React + TypeScript, OAuth2, mobile-first registration flow. Must integrate with auth-service.",
+      "completedAt": "2026-04-23T14:44:00Z"
+    },
+    {
+      "id": "plan",
+      "command": "/spec.plan",
+      "label": "Technical Implementation Plan",
+      "outputPath": "specs/001-modern-register-ui/plan.md",
+      "status": "ready",
+      "required": true,
+      "deps": ["specify"],
+      "missingDeps": [],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    }
+  ]
 }
 ```
+
+---
 
 ## Key Fields Reference
 
 | Field | Set By | Description |
 |---|---|---|
-| `session.id` | `spec.session` (init) | Unique ID for this flow |
-| `session.status` | `spec.session` / `spec.release` | `active` or `completed` |
-| `feature.branch_name` | `spec.git.feature` | Git branch name (e.g. `001-user-auth`) |
-| `feature.feature_num` | `spec.git.feature` | Sequential or timestamp prefix |
-| `feature.feature_dir` | `spec.git.feature` | Path to the feature specs directory |
-| `workflow.initiated_by` | First agent | The agent that started this flow |
-| `workflow.agents_run` | Each agent | Audit trail of agents that ran |
-| `git.base_branch` | `spec.session` (init) | Branch that was active when flow started |
+| `changeName` | `spec.specify` / `update-multi` | Feature name — mirrors `feature.name` |
+| `isComplete` | auto (complete-artifact) | `true` when all required artifacts are done/skipped |
+| `applyRequires` | template | Artifact IDs that must be complete before `/spec.implement` |
+| `pipeline.next_recommended` | auto (complete-artifact) | Next command to run |
+| `pipeline.next_prompt` | auto (from artifact.handoff) | Context prompt written by the last agent for the next one |
+| `pipeline.agents_run` | add-agent | Audit trail of every agent that ran |
+| `artifacts[].status` | agents / scripts | `ready` \| `pending` \| `in_progress` \| `complete` \| `skipped` |
+| `artifacts[].summary` | completing agent | What this step produced (read by downstream agents) |
+| `artifacts[].handoff` | completing agent | Prompt/context to pass to the next agent |
+| `artifacts[].missingDeps` | auto (complete-artifact) | Deps not yet met; empty = can run |
 
 ## Graceful Degradation
 
-- If `.spec/templates/session-state-template.json` is missing, log a warning and continue — do not block the workflow.
+- If `.spec/templates/session-state-template.json` is missing, log a warning and continue.
 - If the script fails, log a warning but do **not** fail the calling agent.
+- If `check-deps` finds blockers, surface them clearly — do not silently run.
 
 ## Output
 
@@ -170,7 +370,12 @@ On successful `init`:
 ```
 [session] Initialized session at .spec/session.json (id: 20260423-143022-AbCd)
 ```
-If session already existed:
+On `complete-artifact`:
 ```
-[session] Session file already exists at .spec/session.json — skipping init.
+[session] Artifact 'specify' marked complete. Next: /spec.plan
+```
+On `check-deps` (blocked):
+```
+[session] 'tasks' is blocked. Missing dependencies:
+  → Run /spec.plan first  (id: plan)
 ```

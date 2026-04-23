@@ -1,12 +1,19 @@
 {
-  "_schema": "spec-session/1.0",
-  "_description": "Active session state for the current spec workflow. One file per active flow. Archived to .spec/features/<feature-name>/ by the release agent when the flow completes.",
+  "_schema": "spec-session/2.0",
+  "_description": "Active session state for the current spec workflow. Unifies change-descriptor artifact pipeline with session metadata. Each artifact node tracks its dependency graph, run status, agent summary, and handoff prompt to the next agent. One file per active flow. Archived to .spec/features/<feature-name>/ by the release agent when the flow completes.",
+
+  "changeName": null,
+  "schemaName": "spec-driven",
+  "isComplete": false,
+  "applyRequires": ["tasks"],
+
   "session": {
     "id": null,
     "created_at": null,
     "updated_at": null,
     "status": "active"
   },
+
   "feature": {
     "name": null,
     "description": null,
@@ -14,26 +21,138 @@
     "feature_num": null,
     "feature_dir": null
   },
+
   "git": {
     "base_branch": null,
     "remote_url": null,
     "repository": null
   },
-  "workflow": {
-    "initiated_by": null,
-    "agents_run": [],
+
+  "pipeline": {
     "current_agent": null,
-    "last_completed_step": null
+    "last_completed": null,
+    "next_recommended": "/spec.specify",
+    "next_prompt": null,
+    "agents_run": []
   },
-  "paths": {
-    "spec_file": null,
-    "plan_file": null,
-    "tasks_file": null,
-    "checklist_file": null
-  },
-  "metadata": {
-    "project_name": null,
-    "tags": [],
-    "notes": null
-  }
+
+  "artifacts": [
+    {
+      "id": "constitution",
+      "command": "/spec.constitution",
+      "label": "Project Constitution",
+      "outputPath": ".spec/memory/constitution.md",
+      "status": "ready",
+      "required": false,
+      "deps": [],
+      "missingDeps": [],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "specify",
+      "command": "/spec.specify",
+      "label": "Feature Specification",
+      "outputPath": "specs/{feature_dir}/spec.md",
+      "status": "ready",
+      "required": true,
+      "deps": [],
+      "missingDeps": [],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "clarify",
+      "command": "/spec.clarify",
+      "label": "Requirements Clarification",
+      "outputPath": null,
+      "status": "pending",
+      "required": false,
+      "deps": ["specify"],
+      "missingDeps": ["specify"],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "plan",
+      "command": "/spec.plan",
+      "label": "Technical Implementation Plan",
+      "outputPath": "specs/{feature_dir}/plan.md",
+      "status": "pending",
+      "required": true,
+      "deps": ["specify"],
+      "missingDeps": ["specify"],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "checklist",
+      "command": "/spec.checklist",
+      "label": "Quality Checklist",
+      "outputPath": "specs/{feature_dir}/checklist.md",
+      "status": "pending",
+      "required": false,
+      "deps": ["specify"],
+      "missingDeps": ["specify"],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "tasks",
+      "command": "/spec.tasks",
+      "label": "Task List",
+      "outputPath": "specs/{feature_dir}/tasks.md",
+      "status": "pending",
+      "required": true,
+      "deps": ["plan"],
+      "missingDeps": ["plan"],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "analyze",
+      "command": "/spec.analyze",
+      "label": "Cross-Artifact Analysis",
+      "outputPath": null,
+      "status": "pending",
+      "required": false,
+      "deps": ["plan", "tasks"],
+      "missingDeps": ["plan", "tasks"],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "taskstoissues",
+      "command": "/spec.taskstoissues",
+      "label": "GitHub Issues Export",
+      "outputPath": null,
+      "status": "pending",
+      "required": false,
+      "deps": ["tasks"],
+      "missingDeps": ["tasks"],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    },
+    {
+      "id": "implement",
+      "command": "/spec.implement",
+      "label": "Implementation",
+      "outputPath": null,
+      "status": "pending",
+      "required": true,
+      "deps": ["tasks"],
+      "missingDeps": ["tasks"],
+      "summary": null,
+      "handoff": null,
+      "completedAt": null
+    }
+  ]
 }
