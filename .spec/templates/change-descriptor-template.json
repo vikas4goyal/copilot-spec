@@ -1,0 +1,6 @@
+{
+  "_schema": "spec-change-descriptor/2.0",
+  "_description": "The change-descriptor pattern is now unified into session.json (spec-session/2.0). Use .spec/templates/session-state-template.json as the single source of truth. This file is kept for reference only.",
+  "_supersededBy": ".spec/templates/session-state-template.json",
+  "_note": "The 'changeName', 'schemaName', 'isComplete', 'applyRequires', and 'artifacts' fields from the original change-descriptor format are all present in session-state-template.json alongside session/feature/git/pipeline metadata."
+}
