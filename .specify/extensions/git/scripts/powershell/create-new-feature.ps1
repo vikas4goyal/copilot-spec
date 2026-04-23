@@ -151,7 +151,7 @@ function ConvertTo-CleanBranchName {
 # ---------------------------------------------------------------------------
 # Source common.ps1 from the project's installed scripts.
 # Search locations in priority order:
-#  1. .specify/scripts/powershell/common.ps1 under the project root
+#  1. .specs/scripts/powershell/common.ps1 under the project root
 #  2. scripts/powershell/common.ps1 under the project root (source checkout)
 #  3. git-common.ps1 next to this script (minimal fallback)
 # ---------------------------------------------------------------------------
@@ -159,7 +159,7 @@ function Find-ProjectRoot {
     param([string]$StartDir)
     $current = Resolve-Path $StartDir
     while ($true) {
-        foreach ($marker in @('.specify', '.git')) {
+        foreach ($marker in @('.specs', '.git')) {
             if (Test-Path (Join-Path $current $marker)) {
                 return $current
             }
@@ -175,7 +175,7 @@ $commonLoaded = $false
 
 if ($projectRoot) {
     $candidates = @(
-        (Join-Path $projectRoot ".specify/scripts/powershell/common.ps1"),
+        (Join-Path $projectRoot ".specs/scripts/powershell/common.ps1"),
         (Join-Path $projectRoot "scripts/powershell/common.ps1")
     )
     foreach ($candidate in $candidates) {

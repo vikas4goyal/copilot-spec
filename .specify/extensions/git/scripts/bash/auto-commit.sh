@@ -19,7 +19,7 @@ SCRIPT_DIR="$(CDPATH="" cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _find_project_root() {
     local dir="$1"
     while [ "$dir" != "/" ]; do
-        if [ -d "$dir/.specify" ] || [ -d "$dir/.git" ]; then
+        if [ -d "$dir/.specs" ] || [ -d "$dir/.git" ]; then
             echo "$dir"
             return 0
         fi
@@ -43,7 +43,7 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 # Read per-command config from git-config.yml
-_config_file="$REPO_ROOT/.specify/extensions/git/git-config.yml"
+_config_file="$REPO_ROOT/.specs/extensions/git/git-config.yml"
 _enabled=false
 _commit_msg=""
 

@@ -1,0 +1,4 @@
+---
+agent: spec.git.validate
+---
+

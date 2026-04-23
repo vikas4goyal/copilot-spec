@@ -69,7 +69,7 @@ $TRAE_FILE     = Join-Path $REPO_ROOT '.trae/rules/project_rules.md'
 $IFLOW_FILE    = Join-Path $REPO_ROOT 'IFLOW.md'
 $FORGE_FILE    = Join-Path $REPO_ROOT 'AGENTS.md'
 
-$TEMPLATE_FILE = Join-Path $REPO_ROOT '.specify/templates/agent-file-template.md'
+$TEMPLATE_FILE = Join-Path $REPO_ROOT '.specs/templates/agent-file-template.md'
 
 # Parsed plan data placeholders
 $script:NEW_LANG = ''
@@ -123,7 +123,7 @@ function Validate-Environment {
     }
     if (-not (Test-Path $TEMPLATE_FILE)) {
         Write-Err "Template file not found at $TEMPLATE_FILE"
-        Write-Info 'Run specify init to scaffold .specify/templates, or add agent-file-template.md there.'
+        Write-Info 'Run specify init to scaffold .specs/templates, or add agent-file-template.md there.'
         exit 1
     }
 }

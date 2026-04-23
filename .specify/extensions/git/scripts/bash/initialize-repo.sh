@@ -12,7 +12,7 @@ SCRIPT_DIR="$(CDPATH="" cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _find_project_root() {
     local dir="$1"
     while [ "$dir" != "/" ]; do
-        if [ -d "$dir/.specify" ] || [ -d "$dir/.git" ]; then
+        if [ -d "$dir/.specs" ] || [ -d "$dir/.git" ]; then
             echo "$dir"
             return 0
         fi
@@ -26,7 +26,7 @@ cd "$REPO_ROOT"
 
 # Read commit message from extension config, fall back to default
 COMMIT_MSG="[Spec Kit] Initial commit"
-_config_file="$REPO_ROOT/.specify/extensions/git/git-config.yml"
+_config_file="$REPO_ROOT/.specs/extensions/git/git-config.yml"
 if [ -f "$_config_file" ]; then
     _msg=$(grep '^init_commit_message:' "$_config_file" 2>/dev/null | sed 's/^init_commit_message:[[:space:]]*//' | sed 's/^["'\'']//' | sed 's/["'\'']*$//')
     if [ -n "$_msg" ]; then

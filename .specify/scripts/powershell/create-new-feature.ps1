@@ -166,7 +166,7 @@ function ConvertTo-CleanBranchName {
 # Load common functions (includes Get-RepoRoot, Test-HasGit, Resolve-Template)
 . "$PSScriptRoot/common.ps1"
 
-# Use common.ps1 functions which prioritize .specify over git
+# Use common.ps1 functions which prioritize .specs over git
 $repoRoot = Get-RepoRoot
 
 # Check if git is available at this repo root (not a parent)

@@ -39,30 +39,30 @@ You **MUST** consider the user input before proceeding (if not empty).
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
 - For each remaining hook, do **not** attempt to interpret or evaluate hook `condition` expressions:
-  - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
-  - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
+   - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
+   - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
 - For each executable hook, output the following based on its `optional` flag:
-  - **Optional hook** (`optional: true`):
-    ```
-    ## Extension Hooks
-
-    **Optional Pre-Hook**: {extension}
-    Command: `/{command}`
-    Description: {description}
-
-    Prompt: {prompt}
-    To execute: `/{command}`
-    ```
-  - **Mandatory hook** (`optional: false`):
-    ```
-    ## Extension Hooks
-
-    **Automatic Pre-Hook**: {extension}
-    Executing: `/{command}`
-    EXECUTE_COMMAND: {command}
-
-    Wait for the result of the hook command before proceeding to the Execution Steps.
-    ```
+   - **Optional hook** (`optional: true`):
+     ```
+     ## Extension Hooks
+ 
+     **Optional Pre-Hook**: {extension}
+     Command: `/{command}`
+     Description: {description}
+ 
+     Prompt: {prompt}
+     To execute: `/{command}`
+     ```
+   - **Mandatory hook** (`optional: false`):
+     ```
+     ## Extension Hooks
+ 
+     **Automatic Pre-Hook**: {extension}
+     Executing: `/{command}`
+     EXECUTE_COMMAND: {command}
+ 
+     Wait for the result of the hook command before proceeding to the Execution Steps.
+     ```
 - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
 
 ## Execution Steps
@@ -123,11 +123,11 @@ You **MUST** consider the user input before proceeding (if not empty).
 5. **Generate checklist** - Create "Unit Tests for Requirements":
    - Create `FEATURE_DIR/checklists/` directory if it doesn't exist
    - Generate unique checklist filename:
-     - Use short, descriptive name based on domain (e.g., `ux.md`, `api.md`, `security.md`)
-     - Format: `[domain].md`
+      - Use short, descriptive name based on domain (e.g., `ux.md`, `api.md`, `security.md`)
+      - Format: `[domain].md`
    - File handling behavior:
-     - If file does NOT exist: Create new file and number items starting from CHK001
-     - If file exists: Append new items to existing file, continuing from the last CHK ID (e.g., if last item is CHK015, start new items at CHK016)
+      - If file does NOT exist: Create new file and number items starting from CHK001
+      - If file exists: Append new items to existing file, continuing from the last CHK ID (e.g., if last item is CHK015, start new items at CHK016)
    - Never delete or replace existing checklist content - always preserve and append
 
    **CORE PRINCIPLE - Test the Requirements, Not the Implementation**:
@@ -336,26 +336,26 @@ Check if `.specify/extensions.yml` exists in the project root.
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
 - For each remaining hook, do **not** attempt to interpret or evaluate hook `condition` expressions:
-  - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
-  - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
+   - If the hook has no `condition` field, or it is null/empty, treat the hook as executable
+   - If the hook defines a non-empty `condition`, skip the hook and leave condition evaluation to the HookExecutor implementation
 - For each executable hook, output the following based on its `optional` flag:
-  - **Optional hook** (`optional: true`):
-    ```
-    ## Extension Hooks
-
-    **Optional Hook**: {extension}
-    Command: `/{command}`
-    Description: {description}
-
-    Prompt: {prompt}
-    To execute: `/{command}`
-    ```
-  - **Mandatory hook** (`optional: false`):
-    ```
-    ## Extension Hooks
-
-    **Automatic Hook**: {extension}
-    Executing: `/{command}`
-    EXECUTE_COMMAND: {command}
-    ```
+   - **Optional hook** (`optional: true`):
+     ```
+     ## Extension Hooks
+ 
+     **Optional Hook**: {extension}
+     Command: `/{command}`
+     Description: {description}
+ 
+     Prompt: {prompt}
+     To execute: `/{command}`
+     ```
+   - **Mandatory hook** (`optional: false`):
+     ```
+     ## Extension Hooks
+ 
+     **Automatic Hook**: {extension}
+     Executing: `/{command}`
+     EXECUTE_COMMAND: {command}
+     ```
 - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently

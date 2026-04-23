@@ -196,7 +196,7 @@ clean_branch_name() {
 # Source common.sh for resolve_template, json_escape, get_repo_root, has_git.
 #
 # Search locations in priority order:
-#  1. .specify/scripts/bash/common.sh under the project root (installed project)
+#  1. .specs/scripts/bash/common.sh under the project root (installed project)
 #  2. scripts/bash/common.sh under the project root (source checkout fallback)
 #  3. git-common.sh next to this script (minimal fallback — lacks resolve_template)
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ SCRIPT_DIR="$(CDPATH="" cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _find_project_root() {
     local dir="$1"
     while [ "$dir" != "/" ]; do
-        if [ -d "$dir/.specify" ] || [ -d "$dir/.git" ]; then
+        if [ -d "$dir/.specs" ] || [ -d "$dir/.git" ]; then
             echo "$dir"
             return 0
         fi
@@ -218,8 +218,8 @@ _find_project_root() {
 _common_loaded=false
 _PROJECT_ROOT=$(_find_project_root "$SCRIPT_DIR") || true
 
-if [ -n "$_PROJECT_ROOT" ] && [ -f "$_PROJECT_ROOT/.specify/scripts/bash/common.sh" ]; then
-    source "$_PROJECT_ROOT/.specify/scripts/bash/common.sh"
+if [ -n "$_PROJECT_ROOT" ] && [ -f "$_PROJECT_ROOT/.specs/scripts/bash/common.sh" ]; then
+    source "$_PROJECT_ROOT/.specs/scripts/bash/common.sh"
     _common_loaded=true
 elif [ -n "$_PROJECT_ROOT" ] && [ -f "$_PROJECT_ROOT/scripts/bash/common.sh" ]; then
     source "$_PROJECT_ROOT/scripts/bash/common.sh"

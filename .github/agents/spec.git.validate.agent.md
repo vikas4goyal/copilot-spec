@@ -4,7 +4,7 @@ description: Validate current branch follows feature branch naming conventions
 
 
 <!-- Extension: git -->
-<!-- Config: .specify/extensions/git/ -->
+<!-- Config: .specs/extensions/git/ -->
 # Validate Feature Branch
 
 Validate that the current Git branch follows the expected feature branch naming conventions.
@@ -50,3 +50,4 @@ If Git is not installed or the directory is not a Git repository:
 - Check the `SPECIFY_FEATURE` environment variable as a fallback
 - If set, validate that value against the naming patterns
 - If not set, skip validation with a warning
+
