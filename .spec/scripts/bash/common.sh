@@ -114,38 +114,22 @@ has_git() {
     git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
-# Strip a single optional path segment (e.g. gitflow "feat/004-name" -> "004-name").
-# Only when the full name is exactly two slash-free segments; otherwise returns the raw name.
-spec_kit_effective_branch_name() {
-    local raw="$1"
-    if [[ "$raw" =~ ^([^/]+)/([^/]+)$ ]]; then
-        printf '%s\n' "${BASH_REMATCH[2]}"
-    else
-        printf '%s\n' "$raw"
-    fi
-}
-
 check_feature_branch() {
-    local raw="$1"
+    local branch="$1"
     local has_git_repo="$2"
 
-    # For non-git repos, we can't enforce branch naming but still provide output
     if [[ "$has_git_repo" != "true" ]]; then
         echo "[specify] Warning: Git repository not detected; skipped branch validation" >&2
         return 0
     fi
 
-    local branch
-    branch=$(spec_kit_effective_branch_name "$raw")
-
     # Accept sequential prefix (3+ digits) but exclude malformed timestamps
-    # Malformed: 7-or-8 digit date + 6-digit time with no trailing slug (e.g. "2026031-143022" or "20260319-143022")
     local is_sequential=false
     if [[ "$branch" =~ ^[0-9]{3,}- ]] && [[ ! "$branch" =~ ^[0-9]{7}-[0-9]{6}- ]] && [[ ! "$branch" =~ ^[0-9]{7,8}-[0-9]{6}$ ]]; then
         is_sequential=true
     fi
     if [[ "$is_sequential" != "true" ]] && [[ ! "$branch" =~ ^[0-9]{8}-[0-9]{6}- ]]; then
-        echo "ERROR: Not on a feature branch. Current branch: $raw" >&2
+        echo "ERROR: Not on a feature branch. Current branch: $branch" >&2
         echo "Feature branches should be named like: 001-feature-name, 1234-feature-name, or 20260319-143022-feature-name" >&2
         return 1
     fi
@@ -154,44 +138,34 @@ check_feature_branch() {
 }
 
 # Find feature directory by numeric prefix instead of exact branch match
-# This allows multiple branches to work on the same spec (e.g., 004-fix-bug, 004-add-feature)
 find_feature_dir_by_prefix() {
     local repo_root="$1"
-    local branch_name
-    branch_name=$(spec_kit_effective_branch_name "$2")
+    local branch_name="$2"
     local specs_dir="$repo_root/specs"
 
-    # Extract prefix from branch (e.g., "004" from "004-whatever" or "20260319-143022" from timestamp branches)
+    # Extract prefix from branch (e.g. "004" or "20260319-143022")
     local prefix=""
     if [[ "$branch_name" =~ ^([0-9]{8}-[0-9]{6})- ]]; then
         prefix="${BASH_REMATCH[1]}"
     elif [[ "$branch_name" =~ ^([0-9]{3,})- ]]; then
         prefix="${BASH_REMATCH[1]}"
     else
-        # If branch doesn't have a recognized prefix, fall back to exact match
         echo "$specs_dir/$branch_name"
         return
     fi
 
-    # Search for directories in specs/ that start with this prefix
     local matches=()
     if [[ -d "$specs_dir" ]]; then
         for dir in "$specs_dir"/"$prefix"-*; do
-            if [[ -d "$dir" ]]; then
-                matches+=("$(basename "$dir")")
-            fi
+            [[ -d "$dir" ]] && matches+=("$(basename "$dir")")
         done
     fi
 
-    # Handle results
     if [[ ${#matches[@]} -eq 0 ]]; then
-        # No match found - return the branch name path (will fail later with clear error)
         echo "$specs_dir/$branch_name"
     elif [[ ${#matches[@]} -eq 1 ]]; then
-        # Exactly one match - perfect!
         echo "$specs_dir/${matches[0]}"
     else
-        # Multiple matches - this shouldn't happen with proper naming convention
         echo "ERROR: Multiple spec directories found with prefix '$prefix': ${matches[*]}" >&2
         echo "Please ensure only one spec directory exists per prefix." >&2
         return 1
@@ -200,48 +174,61 @@ find_feature_dir_by_prefix() {
 
 get_feature_paths() {
     local repo_root=$(get_repo_root)
-    local current_branch=$(get_current_branch)
     local has_git_repo="false"
+    if has_git; then has_git_repo="true"; fi
 
-    if has_git; then
-        has_git_repo="true"
-    fi
+    # Resolve current branch for reference (still needed by callers)
+    local current_branch=$(get_current_branch)
 
-    # Resolve feature directory.  Priority:
+    # Resolve feature directory. Priority:
     #   1. SPECIFY_FEATURE_DIRECTORY env var (explicit override)
-    #   2. .specify/feature.json "feature_directory" key (persisted by /speckit.specify)
-    #   3. Branch-name-based prefix lookup (legacy fallback)
+    #   2. session.json "feature_dir" key (set by spec.session agent)
+    #   3. .specify/feature.json "feature_directory" key (legacy)
+    #   4. Branch-name-based prefix lookup (last resort)
     local feature_dir
+    local session_file="$repo_root/.spec/session.json"
+
     if [[ -n "${SPECIFY_FEATURE_DIRECTORY:-}" ]]; then
         feature_dir="$SPECIFY_FEATURE_DIRECTORY"
-        # Normalize relative paths to absolute under repo root
         [[ "$feature_dir" != /* ]] && feature_dir="$repo_root/$feature_dir"
+    elif [[ -f "$session_file" ]]; then
+        local _fd=""
+        if command -v jq >/dev/null 2>&1; then
+            _fd=$(jq -r '.feature_dir // empty' "$session_file" 2>/dev/null)
+        elif command -v python3 >/dev/null 2>&1; then
+            _fd=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('feature_dir',''))" "$session_file" 2>/dev/null)
+        fi
+        if [[ -n "$_fd" ]]; then
+            feature_dir="$_fd"
+            [[ "$feature_dir" != /* ]] && feature_dir="$repo_root/$feature_dir"
+        else
+            feature_dir=$(find_feature_dir_by_prefix "$repo_root" "$current_branch") || {
+                echo "ERROR: Failed to resolve feature directory" >&2; return 1
+            }
+        fi
     elif [[ -f "$repo_root/.specify/feature.json" ]]; then
-        local _fd
+        local _fd=""
         if command -v jq >/dev/null 2>&1; then
             _fd=$(jq -r '.feature_directory // empty' "$repo_root/.specify/feature.json" 2>/dev/null)
         elif command -v python3 >/dev/null 2>&1; then
-            # Fallback: use Python to parse JSON so pretty-printed/multi-line files work
             _fd=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('feature_directory',''))" "$repo_root/.specify/feature.json" 2>/dev/null)
         else
-            # Last resort: single-line grep fallback (won't work on multi-line JSON)
             _fd=$(grep -o '"feature_directory"[[:space:]]*:[[:space:]]*"[^"]*"' "$repo_root/.specify/feature.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/')
         fi
         if [[ -n "$_fd" ]]; then
             feature_dir="$_fd"
-            # Normalize relative paths to absolute under repo root
             [[ "$feature_dir" != /* ]] && feature_dir="$repo_root/$feature_dir"
-        elif ! feature_dir=$(find_feature_dir_by_prefix "$repo_root" "$current_branch"); then
-            echo "ERROR: Failed to resolve feature directory" >&2
-            return 1
+        else
+            feature_dir=$(find_feature_dir_by_prefix "$repo_root" "$current_branch") || {
+                echo "ERROR: Failed to resolve feature directory" >&2; return 1
+            }
         fi
-    elif ! feature_dir=$(find_feature_dir_by_prefix "$repo_root" "$current_branch"); then
-        echo "ERROR: Failed to resolve feature directory" >&2
-        return 1
+    else
+        feature_dir=$(find_feature_dir_by_prefix "$repo_root" "$current_branch") || {
+            echo "ERROR: Failed to resolve feature directory" >&2; return 1
+        }
     fi
 
-    # Use printf '%q' to safely quote values, preventing shell injection
-    # via crafted branch names or paths containing special characters
     printf 'REPO_ROOT=%q\n' "$repo_root"
     printf 'CURRENT_BRANCH=%q\n' "$current_branch"
     printf 'HAS_GIT=%q\n' "$has_git_repo"
