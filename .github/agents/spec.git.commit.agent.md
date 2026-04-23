@@ -1,16 +1,16 @@
 ---
-description: Auto-commit changes after a Spec Kit command completes
+description: Auto-commit changes after a Spec command completes
 ---
 
 
 
 # Auto-Commit Changes
 
-Automatically stage and commit all changes after a Spec Kit command completes.
+Automatically stage and commit all changes after a Spec command completes.
 
 ## Behavior
 
-This agent is invoked as a hook after (or before) core Spec Kit commands. It:
+This agent is invoked as a hook after (or before) core Spec commands. It:
 
 1. Runs `git status --porcelain` to check if there are any pending changes
 2. If there are changes, runs `git diff HEAD` (and `git diff --cached` for staged files) to read the **actual content** of every change
@@ -81,7 +81,7 @@ In all cases, read **the content of the diff lines** (the `+` and `-` lines), no
 | `style`      | Formatting, whitespace, or naming only (no logic change)                    |
 | `perf`       | Performance improvements                                                    |
 
-**Spec Kit context hints:**
+**Spec context hints:**
 - `spec.md` written or updated → `docs: add/update feature specification`
 - `plan.md` created → `docs: add implementation plan`
 - `tasks.md` generated → `docs: define implementation tasks`

@@ -2,8 +2,6 @@
 description: Initialize a Git repository with an initial commit
 ---
 
-
-
 # Initialize Git Repository
 
 Initialize a Git repository in the current project directory if one does not already exist.
