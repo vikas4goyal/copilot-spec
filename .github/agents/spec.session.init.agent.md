@@ -12,46 +12,35 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Purpose
 
-`spec.session.init` is the feature-flow bootstrap agent. Use it when an agent may be starting a new workflow or needs to ensure the active session exists before work begins.
+`spec.session.init` is the feature-flow bootstrap agent. It is responsible for:
 
-This agent is responsible for:
-- Creating `.spec/session.json` if it does not exist
-- Safely reusing the active session if it already exists
-- Deriving a branch-compatible `name` slug from the caller's input and rephrasing the `description`
-- Recording the initiating agent in `pipeline.agents_run`
-- Creating the git branch and `specs/YYYYMMDD-<name>/` directory
+- Deriving a branch-compatible `name` slug from the caller's input
+- Rephrasing the raw input into a clean `description`
+- Calling `create-new-feature` with those values — which handles **everything** else:
+  - Creates `.spec/session.json` from the template (if it does not exist yet)
+  - Reuses and validates the active session if one already exists
+  - Creates the git branch and `specs/YYYYMMDD-<name>/` directory
+  - Writes `branch_name` and `feature_dir` back to `session.json`
 
 > **Session field roles:**
 > | Field | Set by | Example |
 > |---|---|---|
-> | `name` | This agent | `oauth2-login` |
-> | `description` | This agent | `"Implements OAuth2 login…"` |
+> | `name` | This agent (passed to script) | `oauth2-login` |
+> | `description` | This agent (passed to script) | `"Implements OAuth2 login…"` |
 > | `branch_name` | `create-new-feature` | `oauth2-login` or `oauth2-login-20260423` |
 > | `feature_dir` | `create-new-feature` | `specs/20260423-oauth2-login` |
 >
 > `branch_name` and `feature_dir` intentionally differ: branches are clean slugs (date only on conflict), folders are always date-prefixed so `specs/` lists chronologically.
 
-This agent should be idempotent:
-- If the session already exists, do not overwrite populated metadata unless the caller explicitly provides replacement values.
-- Prefer filling missing values over recomputing existing ones.
+This agent is idempotent:
+- If a session already exists **and** the current git branch matches `branch_name` **and** the feature folder exists → the script skips all creation steps and outputs the existing values.
+- If a session exists but the current git branch does **not** match `branch_name` → the script exits with a clear error directing the user to switch branches or run `/spec.release`.
 
 Use `spec.session.manage` for artifact-state updates after the flow has started.
 
 ## Execution
 
-Run the appropriate script from the repo root:
-
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/manage-session.ps1 -Action init
-```
-
-**Bash:**
-```bash
-bash .spec/scripts/bash/manage-session.sh --action init
-```
-
-### Context Population
+### Step 1 — Derive `name` and `description`
 
 When the caller provides a feature description you **must**:
 
@@ -63,48 +52,29 @@ When the caller provides a feature description you **must**:
 2. **Rephrase `description`** — Rewrite the caller's raw input into one clear, concise sentence in present tense.
    - Example: `"i want oauth login so users can sign in with google"` → `"Implements OAuth2 login flow allowing users to authenticate with their Google account."`
 
-3. **Write `name` and `description` to session** (`branch_name` and `feature_dir` are populated by `create-new-feature` in the next step):
+### Step 2 — Run `create-new-feature`
+
+Pass `name`, `description`, and the calling agent name directly to the script. It will create the session, branch, and folder in one step.
 
 **PowerShell:**
 ```powershell
-.spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"name":"<slug>","description":"<rephrased-desc>"}'
+.spec/scripts/powershell/create-new-feature.ps1 `
+  -Name "<slug>" `
+  -Description "<rephrased-desc>" `
+  -AgentName "spec.<calling-agent>" `
+  -Json
 ```
 
 **Bash:**
 ```bash
-bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch '{"name":"<slug>","description":"<rephrased-desc>"}'
+bash .spec/scripts/bash/create-new-feature.sh \
+  --name "<slug>" \
+  --description "<rephrased-desc>" \
+  --agent-name "spec.<calling-agent>" \
+  --json
 ```
 
-If the calling agent is identifiable, record it:
-
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/manage-session.ps1 -Action add-agent -AgentName "spec.<agent-name>"
-```
-
-**Bash:**
-```bash
-bash .spec/scripts/bash/manage-session.sh --action add-agent --agent-name "spec.<agent-name>"
-```
-
-### Branch / Feature Bootstrap
-
-After the session `name` is set, run the feature bootstrap. The script:
-- Reads `name` from `.spec/session.json` as the base slug
-- Resolves a unique **`branch_name`** independently: tries `<name>` → `<name>-YYYYMMDD` → `<name>-YYYYMMDD-2` …
-- Resolves a unique **`feature_dir`** independently: always `YYYYMMDD-<name>` → `YYYYMMDD-<name>-2` … (date-first for chronological directory sorting)
-- Creates the git branch and `specs/<folder>/` scaffold
-- Writes `branch_name` and `feature_dir` back to session
-
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/create-new-feature.ps1 -Json
-```
-
-**Bash:**
-```bash
-bash .spec/scripts/bash/create-new-feature.sh --json
-```
+That is the complete execution — no separate `manage-session` calls are needed.
 
 ## Typical Callers
 
@@ -115,10 +85,24 @@ bash .spec/scripts/bash/create-new-feature.sh --json
 ## Output
 
 ```text
-[session] Initialized session at .spec/session.json (id: 20260423-143022-AbCd)
-[session] Applied JSON patch to session.
-[session] Recorded agent 'spec.specify' in session.
+[feature] Session created: .spec/session.json (id: 20260423-143022-AbCd)
 [feature] Branch 'oauth2-login' created and checked out
 [feature] Spec file created from template: specs/20260423-oauth2-login/spec.md
 [feature] Session updated: branch_name=oauth2-login  feature_dir=specs/20260423-oauth2-login
+```
+
+### Resume / idempotent output
+
+```text
+[feature] Session name: 'oauth2-login'
+[feature] Current git branch: 'oauth2-login'
+[feature] Already on branch 'oauth2-login' with feature dir 'specs/20260423-oauth2-login' — nothing to do
+```
+
+### Branch mismatch error
+
+```text
+[feature] ERROR: Session expects branch 'oauth2-login' but the current git branch is 'main'.
+[feature]        Switch to the correct branch  →  git checkout oauth2-login
+[feature]        Or release the current feature first  →  /spec.release
 ```

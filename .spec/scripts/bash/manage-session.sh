@@ -2,7 +2,9 @@
 # Manage the active spec session state file (.spec/session.json)
 #
 # Usage:
-#   manage-session.sh --action init
+#   manage-session.sh --action init [--name "oauth2-login"] [--description "..."]
+#   manage-session.sh --action get --field name
+#   manage-session.sh --action get-multi --fields "name,branch_name,feature_dir"
 #   manage-session.sh --action update --field name --value "oauth2-login-google"
 #   manage-session.sh --action update-multi --json-patch '{"name":"oauth2-login-google","description":"Implements OAuth2 login with Google."}'
 #   manage-session.sh --action read
@@ -27,24 +29,30 @@ TEMPLATE_FILE="$REPO_ROOT/.spec/templates/session-state-template.json"
 ACTION=""
 FIELD=""
 VALUE=""
+FIELDS=""
 JSON_PATCH=""
 AGENT_NAME=""
 ARTIFACT_ID=""
 ARTIFACT_FIELD=""
 ARTIFACT_VALUE=""
+INIT_NAME=""
+INIT_DESCRIPTION=""
 AS_JSON=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --action)          ACTION="$2";         shift 2 ;;
-    --field)           FIELD="$2";          shift 2 ;;
-    --value)           VALUE="$2";          shift 2 ;;
-    --json-patch)      JSON_PATCH="$2";     shift 2 ;;
-    --agent-name)      AGENT_NAME="$2";     shift 2 ;;
-    --artifact-id)     ARTIFACT_ID="$2";    shift 2 ;;
-    --artifact-field)  ARTIFACT_FIELD="$2"; shift 2 ;;
-    --artifact-value)  ARTIFACT_VALUE="$2"; shift 2 ;;
-    --json)            AS_JSON=true;        shift ;;
+    --action)          ACTION="$2";           shift 2 ;;
+    --field)           FIELD="$2";            shift 2 ;;
+    --fields)          FIELDS="$2";           shift 2 ;;
+    --value)           VALUE="$2";            shift 2 ;;
+    --json-patch)      JSON_PATCH="$2";       shift 2 ;;
+    --agent-name)      AGENT_NAME="$2";       shift 2 ;;
+    --artifact-id)     ARTIFACT_ID="$2";      shift 2 ;;
+    --artifact-field)  ARTIFACT_FIELD="$2";   shift 2 ;;
+    --artifact-value)  ARTIFACT_VALUE="$2";   shift 2 ;;
+    --name)            INIT_NAME="$2";        shift 2 ;;
+    --description)     INIT_DESCRIPTION="$2"; shift 2 ;;
+    --json)            AS_JSON=true;          shift ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -63,9 +71,64 @@ new_session_id() {
 # ---------------------------------------------------------------------------
 initialize_session() {
   if [[ -f "$SESSION_FILE" ]]; then
-    echo "[session] Session file already exists at $SESSION_FILE — skipping init." >&2
+    echo "[session] Session already exists — reusing." >&2
+
+    # Fill missing name/description non-destructively
+    local changed=false
+
+    if [[ -n "$INIT_NAME" ]]; then
+      local cur_name
+      if command -v jq &>/dev/null; then
+        cur_name=$(jq -r '.name // empty' "$SESSION_FILE" 2>/dev/null || true)
+      else
+        cur_name=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d.get('name') or '')" 2>/dev/null || true)
+      fi
+      if [[ -z "$cur_name" ]]; then
+        local tmp; tmp=$(mktemp)
+        if command -v jq &>/dev/null; then
+          jq --arg v "$INIT_NAME" '.name=$v' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
+        else
+          python3 - "$SESSION_FILE" "name" "$INIT_NAME" <<'PYEOF'
+import json, sys; pf, k, v = sys.argv[1:]
+with open(pf) as f: s = json.load(f)
+s[k] = v
+with open(pf, 'w') as f: json.dump(s, f, indent=2)
+PYEOF
+        fi
+        changed=true
+      fi
+    fi
+
+    if [[ -n "$INIT_DESCRIPTION" ]]; then
+      local cur_desc
+      if command -v jq &>/dev/null; then
+        cur_desc=$(jq -r '.description // empty' "$SESSION_FILE" 2>/dev/null || true)
+      else
+        cur_desc=$(python3 -c "import json; d=json.load(open('$SESSION_FILE')); print(d.get('description') or '')" 2>/dev/null || true)
+      fi
+      if [[ -z "$cur_desc" ]]; then
+        local tmp; tmp=$(mktemp)
+        if command -v jq &>/dev/null; then
+          jq --arg v "$INIT_DESCRIPTION" '.description=$v' "$SESSION_FILE" > "$tmp" && mv "$tmp" "$SESSION_FILE"
+        else
+          python3 - "$SESSION_FILE" "description" "$INIT_DESCRIPTION" <<'PYEOF'
+import json, sys; pf, k, v = sys.argv[1:]
+with open(pf) as f: s = json.load(f)
+s[k] = v
+with open(pf, 'w') as f: json.dump(s, f, indent=2)
+PYEOF
+        fi
+        changed=true
+      fi
+    fi
+
+    if [[ "$changed" == true ]]; then
+      echo "[session] Applied missing name/description to existing session." >&2
+    fi
+
     cat "$SESSION_FILE"; return 0
   fi
+
   [[ -f "$TEMPLATE_FILE" ]] || { echo "[session] ERROR: Template not found at $TEMPLATE_FILE" >&2; exit 1; }
 
   local now id
@@ -73,19 +136,102 @@ initialize_session() {
 
   if command -v jq &>/dev/null; then
     jq --arg id "$id" --arg now "$now" \
-      '.id=$id | .created_at=$now | .updated_at=$now | .status="active"' \
-      "$TEMPLATE_FILE" > "$SESSION_FILE"
+       --arg name "${INIT_NAME:-}" --arg desc "${INIT_DESCRIPTION:-}" \
+       '.id=$id | .created_at=$now | .updated_at=$now | .status="active" |
+        if $name != "" then .name=$name else . end |
+        if $desc  != "" then .description=$desc else . end' \
+       "$TEMPLATE_FILE" > "$SESSION_FILE"
   else
-    python3 - "$TEMPLATE_FILE" "$SESSION_FILE" "$id" "$now" <<'PYEOF'
+    python3 - "$TEMPLATE_FILE" "$SESSION_FILE" "$id" "$now" "${INIT_NAME:-}" "${INIT_DESCRIPTION:-}" <<'PYEOF'
 import json, sys
-tmpl, dest, sid, now = sys.argv[1:]
+tmpl, dest, sid, now, name, desc = sys.argv[1:]
 with open(tmpl) as f: s = json.load(f)
 s.update(id=sid, created_at=now, updated_at=now, status='active')
+if name: s['name'] = name
+if desc:  s['description'] = desc
 with open(dest, 'w') as f: json.dump(s, f, indent=2)
 PYEOF
   fi
-  echo "[session] Initialized session at $SESSION_FILE (id: $id)"
+  echo "[session] Initialized session at $SESSION_FILE (id: $id)" >&2
   cat "$SESSION_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# get  — read a single field by dot-notation path (value to stdout)
+# ---------------------------------------------------------------------------
+get_field() {
+  local path="$1"
+  if [[ ! -f "$SESSION_FILE" ]]; then
+    echo "[session] No active session." >&2; echo ""; return 0
+  fi
+  if command -v jq &>/dev/null; then
+    # Support dot-notation up to two levels; deeper paths uncommon
+    jq -r --arg p "$path" '
+      ($p | split(".")) as $parts |
+      if ($parts | length) == 1 then .[$parts[0]]
+      elif ($parts | length) == 2 then .[$parts[0]][$parts[1]]
+      else .[$parts[0]][$parts[1]][$parts[2]] end // ""
+    ' "$SESSION_FILE" 2>/dev/null || echo ""
+  else
+    python3 - "$SESSION_FILE" "$path" <<'PYEOF'
+import json, sys
+pf, path = sys.argv[1:]
+with open(pf) as f: s = json.load(f)
+parts = path.split('.')
+cur = s
+for p in parts:
+    if cur is None: break
+    cur = cur.get(p)
+print(cur if cur is not None else "")
+PYEOF
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# get-multi  — read multiple fields by comma-separated paths (JSON to stdout)
+# ---------------------------------------------------------------------------
+get_multi() {
+  local paths="$1"
+  if [[ ! -f "$SESSION_FILE" ]]; then
+    echo "[session] No active session." >&2; echo "{}"; return 0
+  fi
+  if command -v jq &>/dev/null; then
+    # Build a jq expression that extracts each path into a named key
+    local jq_expr="{" first=true
+    IFS=',' read -ra path_arr <<< "$paths"
+    for raw_path in "${path_arr[@]}"; do
+      local p; p=$(echo "$raw_path" | tr -d ' ')
+      [[ "$first" == true ]] && first=false || jq_expr+=","
+      # Quote the key; support up to 2-level dot-path
+      local parts_count; parts_count=$(echo "$p" | tr -cd '.' | wc -c)
+      if [[ "$parts_count" -eq 0 ]]; then
+        jq_expr+="\"${p}\": (.${p} // null)"
+      elif [[ "$parts_count" -eq 1 ]]; then
+        local p1 p2; p1=${p%%.*}; p2=${p#*.}
+        jq_expr+="\"${p}\": (.${p1}.${p2} // null)"
+      else
+        jq_expr+="\"${p}\": null"
+      fi
+    done
+    jq_expr+="}"
+    jq "$jq_expr" "$SESSION_FILE" 2>/dev/null || echo "{}"
+  else
+    python3 - "$SESSION_FILE" "$paths" <<'PYEOF'
+import json, sys
+pf, paths_str = sys.argv[1:]
+with open(pf) as f: s = json.load(f)
+result = {}
+for raw in paths_str.split(','):
+    path = raw.strip()
+    parts = path.split('.')
+    cur = s
+    for p in parts:
+        if not isinstance(cur, dict): cur = None; break
+        cur = cur.get(p)
+    result[path] = cur
+print(json.dumps(result))
+PYEOF
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -397,6 +543,12 @@ PYEOF
 # ---------------------------------------------------------------------------
 case "$ACTION" in
   init)              initialize_session ;;
+  get)
+    [[ -z "$FIELD" && -z "$FIELDS" ]] && { echo "--field (or --fields) required" >&2; exit 1; }
+    get_field "${FIELD:-$FIELDS}" ;;
+  get-multi)
+    [[ -z "$FIELDS" ]] && { echo "--fields required" >&2; exit 1; }
+    get_multi "$FIELDS" ;;
   update)
     [[ -z "$FIELD" ]] && { echo "--field required" >&2; exit 1; }
     update_field "$FIELD" "$VALUE" ;;

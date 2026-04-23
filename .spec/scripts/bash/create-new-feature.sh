@@ -1,28 +1,40 @@
 #!/usr/bin/env bash
 set -e
-# create-new-feature.sh — Resolves unique branch and folder names from session 'name',
-# creates the git branch and specs/YYYYMMDD-<name>/ directory, then writes branch_name
-# and feature_dir back to session.json.
+# create-new-feature.sh — Bootstrap a new feature: derives branch/folder names,
+# creates the git branch and specs/YYYYMMDD-<name>/ directory, and keeps
+# session.json in sync — entirely via manage-session.sh (no direct file access).
 #
 # Naming conventions
 #   branch : <name>  →  <name>-YYYYMMDD  →  <name>-YYYYMMDD-2 …
 #   folder : YYYYMMDD-<name>  →  YYYYMMDD-<name>-2 …  (date-prefix for dir sorting)
+#
+# Usage:
+#   create-new-feature.sh --name "oauth2-login" --description "Implements OAuth2 login" [--agent-name "spec.specify"] [--json] [--dry-run]
 
 # ─── Argument parsing ────────────────────────────────────────────────────────
 JSON_MODE=false
 DRY_RUN=false
+ARG_NAME=""
+ARG_DESCRIPTION=""
+ARG_AGENT_NAME=""
+
 while [ $# -gt 0 ]; do
     case "$1" in
-        --json)     JSON_MODE=true ;;
-        --dry-run)  DRY_RUN=true ;;
+        --name)        ARG_NAME="$2";        shift 2 ;;
+        --description) ARG_DESCRIPTION="$2"; shift 2 ;;
+        --agent-name)  ARG_AGENT_NAME="$2";  shift 2 ;;
+        --json)        JSON_MODE=true;        shift ;;
+        --dry-run)     DRY_RUN=true;          shift ;;
         --help|-h)
-            echo "Usage: $0 [--json] [--dry-run]"
-            echo "  --json      Output JSON ({BRANCH_NAME, SPEC_FILE})"
-            echo "  --dry-run   Compute names without creating branches or files"
+            echo "Usage: $0 --name <slug> --description <desc> [--agent-name <agent>] [--json] [--dry-run]"
+            echo "  --name          Feature name slug (e.g. oauth2-login-google)"
+            echo "  --description   One-line feature description"
+            echo "  --agent-name    Calling agent to record in session (e.g. spec.specify)"
+            echo "  --json          Output JSON ({BRANCH_NAME, FEATURE_DIR, SPEC_FILE})"
+            echo "  --dry-run       Compute names without creating branches or files"
             exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
-    shift
 done
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -34,38 +46,40 @@ has_git && HAS_GIT=true || HAS_GIT=false
 cd "$REPO_ROOT"
 
 SPECS_DIR="$REPO_ROOT/specs"
+MGR_SH="$REPO_ROOT/.spec/scripts/bash/manage-session.sh"
+
+if [ ! -f "$MGR_SH" ]; then
+    echo "[feature] ERROR: manage-session.sh not found at $MGR_SH" >&2; exit 1
+fi
+
 [ "$DRY_RUN" = true ] || mkdir -p "$SPECS_DIR"
 
 log() { echo "[feature] $*" >&2; }
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
+# ─── Thin wrapper: call manage-session and propagate errors ──────────────────
+mgr() { bash "$MGR_SH" "$@"; }
+
+# ─── Branch / folder naming helpers ──────────────────────────────────────────
 
 get_unique_branch_name() {
     local base="$1"
-
-    # Collect all existing branch names starting with $base ONCE
     local taken="" line n
     if [ "$HAS_GIT" = true ]; then
         while IFS= read -r line; do
             n=$(printf '%s' "$line" | sed 's/^[* ]*//' | sed 's/ .*//')
             [ -n "$n" ] && taken="${taken}${n}"$'\n'
         done < <(git branch --list "${base}*" 2>/dev/null || true)
-
         while IFS= read -r line; do
             n=$(printf '%s' "$line" | sed 's|.*/||' | sed 's/ .*//')
             [ -n "$n" ] && taken="${taken}${n}"$'\n'
         done < <(git branch -r --list "*/${base}*" 2>/dev/null || true)
     fi
-
     _bt() { printf '%s' "$taken" | grep -qxF -- "$1" 2>/dev/null; }
 
-    # 1. Clean base name — preferred; keeps branch list readable
     _bt "$base" || { echo "$base"; return; }
-    # 2. Date suffix — clearly shows when the duplicate was created
     local ds; ds=$(date -u +"%Y%m%d")
     local dc="${base}-${ds}"
     _bt "$dc" || { echo "$dc"; return; }
-    # 3. Same-day counter
     local n=2
     while true; do
         local c="${base}-${ds}-${n}"
@@ -76,41 +90,23 @@ get_unique_branch_name() {
 
 get_unique_folder_name() {
     local base="$1"
-    # Folders are ALWAYS date-prefixed (YYYYMMDD-<name>) so ls specs/ sorts
-    # chronologically. Collect only dirs sharing today's date prefix (once).
     local ds; ds=$(date -u +"%Y%m%d")
     local prefix="${ds}-${base}"
-
     local taken="" d
     for d in "$SPECS_DIR"/${prefix}*/; do
         [ -d "$d" ] || continue
         local n; n=$(basename "$d")
         taken="${taken}${n}"$'\n'
     done
-
     _ft() { printf '%s' "$taken" | grep -qxF -- "$1" 2>/dev/null; }
 
-    # 1. Base date-prefixed name
     _ft "$prefix" || { echo "$prefix"; return; }
-    # 2. Counter suffix
     local n=2
     while true; do
         local c="${prefix}-${n}"
         _ft "$c" || { echo "$c"; return; }
         n=$((n + 1))
     done
-}
-
-_sync_session() {
-    local branch_name="$1" folder_name="$2"
-    local mgr="$REPO_ROOT/.spec/scripts/bash/manage-session.sh"
-    if [ ! -f "$mgr" ]; then
-        log "manage-session.sh not found — skipping session update"
-        return 0
-    fi
-    local patch="{\"branch_name\":\"${branch_name}\",\"feature_dir\":\"specs/${folder_name}\"}"
-    bash "$mgr" --action update-multi --json-patch "$patch" 2>/dev/null || true
-    log "Session updated: branch_name=${branch_name}  feature_dir=specs/${folder_name}"
 }
 
 _output() {
@@ -130,22 +126,47 @@ _output() {
     fi
 }
 
-# ─── Read session.json ───────────────────────────────────────────────────────
-SESSION_FILE="$REPO_ROOT/.spec/session.json"
-if [ ! -f "$SESSION_FILE" ]; then
-    log "No session.json found — run spec.session init first"; exit 1
+# ─── Session bootstrap ────────────────────────────────────────────────────────
+
+if [ "$DRY_RUN" != true ]; then
+    # Step 1: Init — creates session from template (or reuses existing).
+    #         Passes name/description so they are written on creation, or filled
+    #         in non-destructively if the session already exists but has blanks.
+    INIT_ARGS=(--action init)
+    [ -n "$ARG_NAME" ]        && INIT_ARGS+=(--name "$ARG_NAME")
+    [ -n "$ARG_DESCRIPTION" ] && INIT_ARGS+=(--description "$ARG_DESCRIPTION")
+    mgr "${INIT_ARGS[@]}" > /dev/null
 fi
 
-if command -v jq >/dev/null 2>&1; then
-    BASE_NAME=$(jq -r '.name // empty' "$SESSION_FILE" 2>/dev/null)
-elif command -v python3 >/dev/null 2>&1; then
-    BASE_NAME=$(python3 -c \
-        "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('name',''))" \
-        "$SESSION_FILE" 2>/dev/null)
+# Step 2: Read current session values via manage-session (stdout = JSON)
+BASE_NAME=""
+SESS_BRANCH=""
+SESS_FDIR=""
+
+SESS_JSON=$(mgr --action get-multi --fields "name,branch_name,feature_dir" 2>/dev/null || true)
+
+if [ -n "$SESS_JSON" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        BASE_NAME=$(echo "$SESS_JSON"   | jq -r '.name          // empty' 2>/dev/null || true)
+        SESS_BRANCH=$(echo "$SESS_JSON" | jq -r '.branch_name   // empty' 2>/dev/null || true)
+        SESS_FDIR=$(echo "$SESS_JSON"   | jq -r '.feature_dir   // empty' 2>/dev/null || true)
+    elif command -v python3 >/dev/null 2>&1; then
+        BASE_NAME=$(echo "$SESS_JSON"   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('name','') or '')")
+        SESS_BRANCH=$(echo "$SESS_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('branch_name','') or '')")
+        SESS_FDIR=$(echo "$SESS_JSON"   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('feature_dir','') or '')")
+    fi
 fi
+
+# In dry-run (no session created), still honour the --name param
+[ -z "$BASE_NAME" ] && BASE_NAME="$ARG_NAME"
 
 if [ -z "$BASE_NAME" ]; then
-    log "session.json has no name — populate it before creating a feature"; exit 1
+    if [ "$DRY_RUN" = true ]; then
+        log "ERROR: No active session and --name not provided. Pass --name <slug> for dry-run."
+    else
+        log "ERROR: Feature name is not set. Pass --name <slug> to provide one."
+    fi
+    exit 1
 fi
 log "Session name: '$BASE_NAME'"
 
@@ -154,26 +175,31 @@ CURRENT_BRANCH=""
 [ "$HAS_GIT" = true ] && CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 log "Current git branch: '${CURRENT_BRANCH:-none}'"
 
-# ── Early-exit: session already resolved and environment matches ─────────────
-if command -v jq >/dev/null 2>&1; then
-    SESS_BRANCH=$(jq -r '.branch_name // empty' "$SESSION_FILE" 2>/dev/null)
-    SESS_FDIR=$(jq -r '.feature_dir // empty'   "$SESSION_FILE" 2>/dev/null)
-fi
+# ── Idempotency / consistency check ──────────────────────────────────────────
 if [ -n "$SESS_BRANCH" ] && [ -n "$SESS_FDIR" ]; then
     EXISTING_DIR="$REPO_ROOT/$SESS_FDIR"
+
     if [ "$CURRENT_BRANCH" = "$SESS_BRANCH" ] && [ -d "$EXISTING_DIR" ]; then
         log "Already on branch '$SESS_BRANCH' with feature dir '$SESS_FDIR' — nothing to do"
         _output "$SESS_BRANCH" "$EXISTING_DIR"
         exit 0
     fi
+
+    if [ "$CURRENT_BRANCH" != "$SESS_BRANCH" ]; then
+        log "ERROR: Session expects branch '$SESS_BRANCH' but the current git branch is '${CURRENT_BRANCH:-none}'."
+        log "       Switch to the correct branch  →  git checkout $SESS_BRANCH"
+        log "       Or release the current feature first  →  /spec.release"
+        exit 1
+    fi
+    # branch matches but folder is missing — fall through and re-create
 fi
 
-# ─── Fetch remote refs so branch availability check is accurate ─────────────
+# ─── Fetch remote refs so branch availability check is accurate ──────────────
 if [ "$HAS_GIT" = true ] && [ "$DRY_RUN" != true ]; then
     git fetch --all --prune >/dev/null 2>&1 || true
 fi
 
-# ─── Resolve unique branch name and unique folder name (independent) ─────────
+# ─── Resolve unique branch name and folder name ───────────────────────────────
 BRANCH_NAME=$(get_unique_branch_name "$BASE_NAME")
 FOLDER_NAME=$(get_unique_folder_name "$BASE_NAME")
 
@@ -183,7 +209,7 @@ log "Folder name: $FOLDER_NAME"
 FEATURE_DIR="$SPECS_DIR/$FOLDER_NAME"
 SPEC_FILE="$FEATURE_DIR/spec.md"
 
-# ─── Create branch and spec dir ─────────────────────────────────────────────
+# ─── Create branch and spec dir ──────────────────────────────────────────────
 if [ "$DRY_RUN" != true ]; then
     if [ "$HAS_GIT" = true ]; then
         log "Creating git branch '$BRANCH_NAME'..."
@@ -212,12 +238,20 @@ if [ "$DRY_RUN" != true ]; then
         log "Spec file already exists: $SPEC_FILE"
     fi
 
-    _sync_session "$BRANCH_NAME" "$FOLDER_NAME"
+    # ── Write branch_name and feature_dir back to session ────────────────────
+    PATCH="{\"branch_name\":\"${BRANCH_NAME}\",\"feature_dir\":\"specs/${FOLDER_NAME}\"}"
+    mgr --action update-multi --json-patch "$PATCH" > /dev/null
+
+    # ── Record calling agent (if provided) ───────────────────────────────────
+    if [ -n "$ARG_AGENT_NAME" ]; then
+        mgr --action add-agent --agent-name "$ARG_AGENT_NAME" > /dev/null
+    fi
+
+    log "Session updated: branch_name=${BRANCH_NAME}  feature_dir=specs/${FOLDER_NAME}"
 else
     log "[dry-run] branch_name  → $BRANCH_NAME"
     log "[dry-run] feature_dir  → specs/$FOLDER_NAME"
-    log "[dry-run] Would create branch and spec dir, then update session"
+    log "[dry-run] Would create session.json (if needed), branch and spec dir"
 fi
 
 _output "$BRANCH_NAME" "$FEATURE_DIR"
-

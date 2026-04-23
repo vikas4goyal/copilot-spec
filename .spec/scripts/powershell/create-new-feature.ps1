@@ -1,14 +1,20 @@
 #!/usr/bin/env pwsh
-# create-new-feature.ps1 — Resolves unique branch and folder names from session 'name',
-# creates the git branch and specs/YYYYMMDD-<name>/ directory, then writes branch_name
-# and feature_dir back to session.json.
+# create-new-feature.ps1 — Bootstrap a new feature: derives branch/folder names,
+# creates the git branch and specs/YYYYMMDD-<name>/ directory, and keeps
+# session.json in sync — entirely via manage-session.ps1 (no direct file access).
 #
 # Naming conventions
 #   branch  : <name>  →  <name>-YYYYMMDD  →  <name>-YYYYMMDD-2 …
 #   folder  : YYYYMMDD-<name>  →  YYYYMMDD-<name>-2 …  (date-prefix for dir sorting)
+#
+# Usage:
+#   create-new-feature.ps1 -Name "oauth2-login" -Description "Implements OAuth2 login" [-AgentName "spec.specify"] [-Json] [-DryRun]
 
 [CmdletBinding()]
 param(
+    [string]$Name,
+    [string]$Description,
+    [string]$AgentName,
     [switch]$Json,
     [switch]$DryRun,
     [switch]$Help
@@ -16,9 +22,12 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ($Help) {
-    Write-Host 'Usage: create-new-feature.ps1 [-Json] [-DryRun]'
-    Write-Host '  -Json     Output JSON ({BRANCH_NAME, SPEC_FILE})'
-    Write-Host '  -DryRun   Compute names without creating branches or files'
+    Write-Host 'Usage: create-new-feature.ps1 -Name <slug> -Description <desc> [-AgentName <agent>] [-Json] [-DryRun]'
+    Write-Host '  -Name         Feature name slug (e.g. oauth2-login-google)'
+    Write-Host '  -Description  One-line feature description'
+    Write-Host '  -AgentName    Calling agent to record in session (e.g. spec.specify)'
+    Write-Host '  -Json         Output JSON ({BRANCH_NAME, FEATURE_DIR, SPEC_FILE})'
+    Write-Host '  -DryRun       Compute names without creating branches or files'
     exit 0
 }
 
@@ -28,12 +37,25 @@ $hasGit   = Test-HasGit
 Set-Location $repoRoot
 
 $specsDir = Join-Path $repoRoot 'specs'
+$mgrPs    = Join-Path $repoRoot '.spec/scripts/powershell/manage-session.ps1'
+
+if (-not (Test-Path $mgrPs)) {
+    Write-Host '[feature] ERROR: manage-session.ps1 not found.' -ForegroundColor Red; exit 1
+}
+
 if (-not $DryRun) { New-Item -ItemType Directory -Path $specsDir -Force | Out-Null }
 
 function log([string]$msg) { Write-Host ('[feature] ' + $msg) -ForegroundColor DarkCyan }
 
+# ─── Thin wrapper so callers always get a clean exit-code check ──────────────
+function Invoke-Session([hashtable]$Params) {
+    & $mgrPs @Params
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+# ─── Branch / folder naming ───────────────────────────────────────────────────
+
 function Get-UniqueBranchName([string]$base) {
-    # ── Collect all existing branch names that start with $base (once) ───────
     $taken = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::OrdinalIgnoreCase)
     if ($hasGit) {
@@ -46,46 +68,26 @@ function Get-UniqueBranchName([string]$base) {
         }
         $ErrorActionPreference = 'Stop'
     }
-
-    # 1. Clean base name — preferred; keeps branch list readable
     if (-not $taken.Contains($base)) { return $base }
-    # 2. Date suffix — clearly shows when the duplicate was created
     $ds = Get-Date -Format 'yyyyMMdd'
     $dc = "$base-$ds"
     if (-not $taken.Contains($dc)) { return $dc }
-    # 3. Same-day counter
     $n = 2
     while ($true) { $c = "$base-$ds-$n"; if (-not $taken.Contains($c)) { return $c }; $n++ }
 }
 
 function Get-UniqueFolderName([string]$base) {
-    # Folders are ALWAYS date-prefixed (YYYYMMDD-<name>) so `ls specs/` sorts
-    # chronologically. Collect only dirs that share today's date prefix (once).
-    $ds = Get-Date -Format 'yyyyMMdd'
+    $ds     = Get-Date -Format 'yyyyMMdd'
     $prefix = "$ds-$base"
-
-    $taken = [System.Collections.Generic.HashSet[string]]::new(
+    $taken  = [System.Collections.Generic.HashSet[string]]::new(
         [System.StringComparer]::OrdinalIgnoreCase)
     if (Test-Path $specsDir) {
         Get-ChildItem -Path $specsDir -Directory -Filter "$prefix*" |
             ForEach-Object { $taken.Add($_.Name) | Out-Null }
     }
-
-    # 1. Base date-prefixed name
     if (-not $taken.Contains($prefix)) { return $prefix }
-    # 2. Counter suffix
     $n = 2
     while ($true) { $c = "$prefix-$n"; if (-not $taken.Contains($c)) { return $c }; $n++ }
-}
-
-function Invoke-SessionUpdate([string]$branchName, [string]$folderName) {
-    $mgr = Join-Path $repoRoot '.spec/scripts/powershell/manage-session.ps1'
-    if (-not (Test-Path $mgr)) { log 'manage-session.ps1 not found — skipping session update'; return }
-    $patch = '{"branch_name":"' + $branchName + '","feature_dir":"specs/' + $folderName + '"}'
-    $ErrorActionPreference = 'Continue'
-    & $mgr -Action update-multi -JsonPatch $patch 2>$null
-    $ErrorActionPreference = 'Stop'
-    log ('Session updated: branch_name=' + $branchName + '  feature_dir=specs/' + $folderName)
 }
 
 function Write-Result([string]$branch, [string]$featDir) {
@@ -102,18 +104,42 @@ function Write-Result([string]$branch, [string]$featDir) {
     }
 }
 
-# ─── Read session.json ───────────────────────────────────────────────────────
-$sessionFile = Join-Path $repoRoot '.spec/session.json'
-if (-not (Test-Path $sessionFile)) {
-    log 'No session.json found — run spec.session init first'; exit 1
+# ─── Session bootstrap ────────────────────────────────────────────────────────
+
+if (-not $DryRun) {
+    # Step 1: Init — creates session from template (or reuses existing).
+    #         Passes name/description so they are written on creation, or filled
+    #         in non-destructively if the session already exists but has blanks.
+    $initArgs = @{ Action = 'init' }
+    if (-not [string]::IsNullOrWhiteSpace($Name))        { $initArgs['Name']        = $Name }
+    if (-not [string]::IsNullOrWhiteSpace($Description)) { $initArgs['Description'] = $Description }
+    Invoke-Session $initArgs
 }
 
-try { $sess = Get-Content $sessionFile -Raw | ConvertFrom-Json }
-catch { log 'ERROR: Could not parse session.json'; exit 1 }
+# Step 2: Read current session values via manage-session (captures stdout JSON)
+$baseName    = $null
+$sessBranch  = $null
+$sessFeatDir = $null
 
-$baseName = $sess.name
+$ErrorActionPreference = 'Continue'
+$sessRaw = & $mgrPs -Action get-multi -Fields 'name,branch_name,feature_dir' 2>$null
+$ErrorActionPreference = 'Stop'
+
+if ($sessRaw) {
+    try {
+        $sessData    = $sessRaw | ConvertFrom-Json
+        $baseName    = $sessData.name
+        $sessBranch  = $sessData.branch_name
+        $sessFeatDir = $sessData.feature_dir
+    } catch { <# session may not exist in dry-run; handled below #> }
+}
+
+# In dry-run (no session created), still honour the -Name param
+if ([string]::IsNullOrWhiteSpace($baseName)) { $baseName = $Name }
 if ([string]::IsNullOrWhiteSpace($baseName)) {
-    log 'session.json has no name — populate it before creating a feature'; exit 1
+    if ($DryRun) { log 'ERROR: No active session and -Name not provided. Pass -Name <slug> for dry-run.' }
+    else         { log 'ERROR: Feature name is not set. Pass -Name <slug> to provide one.' }
+    exit 1
 }
 log ('Session name: ' + $baseName)
 
@@ -126,24 +152,33 @@ if ($hasGit) {
 }
 log ('Current git branch: ' + ($currentBranch ?? 'none'))
 
-# ── Early-exit: session already resolved and environment matches ─────────────
-if ($sess.branch_name -and $sess.feature_dir) {
-    $existingDir = Join-Path $repoRoot $sess.feature_dir
-    if ($currentBranch -eq $sess.branch_name -and (Test-Path $existingDir)) {
-        log ('Already on branch ''' + $sess.branch_name + ''' with feature dir ''' + $sess.feature_dir + ''' — nothing to do')
-        Write-Result $sess.branch_name $existingDir
+# ── Idempotency / consistency check ──────────────────────────────────────────
+if ($sessBranch -and $sessFeatDir) {
+    $existingDir = Join-Path $repoRoot $sessFeatDir
+
+    if ($currentBranch -eq $sessBranch -and (Test-Path $existingDir)) {
+        log ('Already on branch ''' + $sessBranch + ''' with feature dir ''' + $sessFeatDir + ''' — nothing to do')
+        Write-Result $sessBranch $existingDir
         exit 0
     }
+
+    if ($currentBranch -ne $sessBranch) {
+        log ('ERROR: Session expects branch ''' + $sessBranch + ''' but the current git branch is ''' + $currentBranch + '''.')
+        log ('       Switch to the correct branch  →  git checkout ' + $sessBranch)
+        log ('       Or release the current feature first  →  /spec.release')
+        exit 1
+    }
+    # branch matches but folder is missing — fall through and re-create
 }
 
-# ─── Fetch remote refs so branch availability check is accurate ─────────────
+# ─── Fetch remote refs so branch availability check is accurate ──────────────
 if ($hasGit -and -not $DryRun) {
     $ErrorActionPreference = 'Continue'
     git fetch --all --prune 2>$null | Out-Null
     $ErrorActionPreference = 'Stop'
 }
 
-# ─── Resolve unique branch name and unique folder name (independent) ─────────
+# ─── Resolve unique branch name and folder name ───────────────────────────────
 $branchName = Get-UniqueBranchName $baseName
 $folderName = Get-UniqueFolderName $baseName
 
@@ -153,7 +188,7 @@ log ("Folder name: $folderName")
 $featureDir = Join-Path $specsDir $folderName
 $specFile   = Join-Path $featureDir 'spec.md'
 
-# ─── Create branch and spec dir ─────────────────────────────────────────────
+# ─── Create branch and spec dir ──────────────────────────────────────────────
 if (-not $DryRun) {
     if ($hasGit) {
         log ("Creating git branch '$branchName'...")
@@ -188,12 +223,20 @@ if (-not $DryRun) {
         log ('Spec file already exists: ' + $specFile)
     }
 
-    Invoke-SessionUpdate $branchName $folderName
+    # ── Write branch_name and feature_dir back to session ────────────────────
+    $patch = '{"branch_name":"' + $branchName + '","feature_dir":"specs/' + $folderName + '"}'
+    Invoke-Session @{ Action = 'update-multi'; JsonPatch = $patch }
+
+    # ── Record calling agent (if provided) ───────────────────────────────────
+    if (-not [string]::IsNullOrWhiteSpace($AgentName)) {
+        Invoke-Session @{ Action = 'add-agent'; AgentName = $AgentName }
+    }
+
+    log ('Session updated: branch_name=' + $branchName + '  feature_dir=specs/' + $folderName)
 } else {
     log ('[dry-run] branch_name  → ' + $branchName)
     log ('[dry-run] feature_dir  → specs/' + $folderName)
-    log ('[dry-run] Would create branch and spec dir, then update session')
+    log ('[dry-run] Would create session.json (if needed), branch and spec dir')
 }
 
 Write-Result $branchName $featureDir
-

@@ -2,7 +2,9 @@
 # Manage the active spec session state file (.spec/session.json)
 #
 # Usage:
-#   manage-session.ps1 -Action init
+#   manage-session.ps1 -Action init [-Name "oauth2-login"] [-Description "..."]
+#   manage-session.ps1 -Action get -Field name
+#   manage-session.ps1 -Action get-multi -Fields "name,branch_name,feature_dir"
 #   manage-session.ps1 -Action update -Field name -Value "oauth2-login-google"
 #   manage-session.ps1 -Action update-multi -JsonPatch '{"name":"oauth2-login-google","description":"Implements OAuth2 login with Google."}'
 #   manage-session.ps1 -Action read
@@ -17,9 +19,16 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('init','update','update-multi','read','add-agent','archive',
+    [ValidateSet('init','get','get-multi','update','update-multi','read','add-agent','archive',
                  'complete-artifact','update-artifact','skip-artifact','check-deps')]
     [string]$Action,
+
+    # For init (optional — set fields on creation / fill missing on resume)
+    [string]$Name,
+    [string]$Description,
+
+    # For get / get-multi
+    [string]$Fields,          # comma-separated dot-notation paths, e.g. "name,branch_name,feature_dir"
 
     # For update / update-multi
     [string]$Field,
@@ -104,28 +113,82 @@ function Update-PipelineNext($session) {
 # ---------------------------------------------------------------------------
 
 function Initialize-Session {
-    if (Test-Path $sessionFile) {
-        Write-Host ('[session] Session already exists at ' + $sessionFile + ' - skipping init.') -ForegroundColor DarkGray
-        return Read-Session
+    if (-not (Test-Path $sessionFile)) {
+        if (-not (Test-Path $templateFile)) {
+            Write-Error ('[session] Template not found at ' + $templateFile + '. Cannot initialize session.')
+            exit 1
+        }
+        $session            = Get-Content $templateFile -Raw | ConvertFrom-Json
+        $now                = Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ'
+        $session.id         = Get-NewSessionId
+        $session.created_at = $now
+        $session.updated_at = $now
+        $session.status     = 'active'
+        # Apply name/description if provided at creation time
+        if (-not [string]::IsNullOrWhiteSpace($Name))        { $session.name        = $Name }
+        if (-not [string]::IsNullOrWhiteSpace($Description)) { $session.description = $Description }
+        $session | ConvertTo-Json -Depth 20 | Set-Content $sessionFile -Encoding UTF8
+        Write-Host ('[session] Initialized session at ' + $sessionFile + ' (id: ' + $session.id + ')') -ForegroundColor Green
+        return $session
     }
 
-    if (-not (Test-Path $templateFile)) {
-        Write-Error ('[session] Template not found at ' + $templateFile + '. Cannot initialize session.')
-        exit 1
+    # Session already exists — reuse, but fill missing name/description non-destructively
+    Write-Host ('[session] Session already exists — reusing.') -ForegroundColor DarkGray
+    $session = Read-Session
+    $changed = $false
+    if (-not [string]::IsNullOrWhiteSpace($Name) -and [string]::IsNullOrWhiteSpace($session.name)) {
+        $session.name = $Name; $changed = $true
     }
-
-    $session = Get-Content $templateFile -Raw | ConvertFrom-Json
-    $now     = (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')
-
-    $session.id         = Get-NewSessionId
-    $session.created_at = $now
-    $session.updated_at = $now
-    $session.status     = 'active'
-
-
-    $session | ConvertTo-Json -Depth 20 | Set-Content $sessionFile -Encoding UTF8
-    Write-Host ('[session] Initialized session at ' + $sessionFile + ' (id: ' + $session.id + ')') -ForegroundColor Green
+    if (-not [string]::IsNullOrWhiteSpace($Description) -and [string]::IsNullOrWhiteSpace($session.description)) {
+        $session.description = $Description; $changed = $true
+    }
+    if ($changed) {
+        Save-Session $session
+        Write-Host '[session] Applied missing name/description to existing session.' -ForegroundColor DarkGray
+    }
     return $session
+}
+
+# ---------------------------------------------------------------------------
+# Get a single field value by dot-notation path (outputs raw value to stdout)
+# ---------------------------------------------------------------------------
+function Get-FieldValue([string]$FieldPath) {
+    if (-not (Test-Path $sessionFile)) {
+        Write-Host '[session] No active session.' -ForegroundColor Yellow; return
+    }
+    $session = Read-Session
+    $parts   = $FieldPath -split '\.'
+    $current = $session
+    foreach ($p in $parts) {
+        if ($null -eq $current) { $current = $null; break }
+        $current = $current.$p
+    }
+    if ($null -ne $current) { Write-Output $current.ToString() }
+    else                    { Write-Output '' }
+}
+
+# ---------------------------------------------------------------------------
+# Get multiple field values by comma-separated dot-notation paths (outputs JSON)
+# ---------------------------------------------------------------------------
+function Get-MultiValues([string]$FieldPaths) {
+    if (-not (Test-Path $sessionFile)) {
+        Write-Host '[session] No active session.' -ForegroundColor Yellow
+        Write-Output '{}'
+        return
+    }
+    $session = Read-Session
+    $result  = [ordered]@{}
+    foreach ($rawPath in ($FieldPaths -split ',')) {
+        $path    = $rawPath.Trim()
+        $parts   = $path -split '\.'
+        $current = $session
+        foreach ($p in $parts) {
+            if ($null -eq $current) { $current = $null; break }
+            $current = $current.$p
+        }
+        $result[$path] = $current
+    }
+    $result | ConvertTo-Json -Compress | Write-Output
 }
 
 function Update-SessionField([string]$FieldPath, $FieldValue) {
@@ -310,6 +373,14 @@ switch ($Action) {
     'init' {
         $result = Initialize-Session
         if ($Json) { $result | ConvertTo-Json -Depth 20 }
+    }
+    'get' {
+        if (-not $Field -and -not $Fields) { Write-Error "-Field (or -Fields) is required for 'get'"; exit 1 }
+        Get-FieldValue -FieldPath ($Field ?? $Fields)
+    }
+    'get-multi' {
+        if (-not $Fields) { Write-Error "-Fields is required for 'get-multi'"; exit 1 }
+        Get-MultiValues -FieldPaths $Fields
     }
     'update' {
         if (-not $Field) { Write-Error "-Field is required for 'update'"; exit 1 }
