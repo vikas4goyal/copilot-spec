@@ -2,11 +2,11 @@
 description: Execute the implementation planning workflow using the plan template to generate design artifacts.
 handoffs:
   - label: Create Tasks
-    agent: speckit.tasks
+    agent: spec.tasks
     prompt: Break the plan into tasks
     send: true
   - label: Create Checklist
-    agent: speckit.checklist
+    agent: spec.checklist
     prompt: Create a checklist for the following domain...
 ---
 
@@ -21,7 +21,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution Checks
 
 **Check for extension hooks (before planning)**:
-- Check if `.specify/extensions.yml` exists in the project root.
+- Check if `.spec/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_plan` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -50,13 +50,13 @@ You **MUST** consider the user input before proceeding (if not empty).
   
       Wait for the result of the hook command before proceeding to the Outline.
       ```
-- If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+- If no hooks are registered or `.spec/extensions.yml` does not exist, skip silently
 
 ## Outline
 
-1. **Setup**: Run `.specify/scripts/powershell/setup-plan.ps1 -Json` from repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
+1. **Setup**: Run `.spec/scripts/powershell/setup-plan.ps1 -Json` from repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
-2. **Load context**: Read FEATURE_SPEC and `.specify/memory/constitution.md`. Load IMPL_PLAN template (already copied).
+2. **Load context**: Read FEATURE_SPEC and `.spec/memory/constitution.md`. Load IMPL_PLAN template (already copied).
 
 3. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:
     - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
@@ -69,7 +69,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 4. **Stop and report**: Command ends after Phase 2 planning. Report branch, IMPL_PLAN path, and generated artifacts.
 
-5. **Check for extension hooks**: After reporting, check if `.specify/extensions.yml` exists in the project root.
+5. **Check for extension hooks**: After reporting, check if `.spec/extensions.yml` exists in the project root.
     - If it exists, read it and look for entries under the `hooks.after_plan` key
     - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
     - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -96,7 +96,7 @@ You **MUST** consider the user input before proceeding (if not empty).
           Executing: `/{command}`
           EXECUTE_COMMAND: {command}
           ```
-    - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+    - If no hooks are registered or `.spec/extensions.yml` does not exist, skip silently
 
 ## Phases
 
@@ -139,7 +139,7 @@ You **MUST** consider the user input before proceeding (if not empty).
     - Skip if project is purely internal (build scripts, one-off tools, etc.)
 
 3. **Agent context update**:
-    - Run `.specify/scripts/powershell/update-agent-context.ps1 -AgentType copilot`
+    - Run `.spec/scripts/powershell/update-agent-context.ps1 -AgentType copilot`
     - These scripts detect which AI agent is in use
     - Update the appropriate agent-specific context file
     - Add only new technology from current plan

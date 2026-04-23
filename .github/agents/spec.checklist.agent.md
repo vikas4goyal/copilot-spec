@@ -34,7 +34,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution Checks
 
 **Check for extension hooks (before checklist generation)**:
-- Check if `.specify/extensions.yml` exists in the project root.
+- Check if `.spec/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_checklist` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -63,11 +63,11 @@ You **MUST** consider the user input before proceeding (if not empty).
  
      Wait for the result of the hook command before proceeding to the Execution Steps.
      ```
-- If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+- If no hooks are registered or `.spec/extensions.yml` does not exist, skip silently
 
 ## Execution Steps
 
-1. **Setup**: Run `.specify/scripts/powershell/check-prerequisites.ps1 -Json` from repo root and parse JSON for FEATURE_DIR and AVAILABLE_DOCS list.
+1. **Setup**: Run `.spec/scripts/powershell/check-prerequisites.ps1 -Json` from repo root and parse JSON for FEATURE_DIR and AVAILABLE_DOCS list.
    - All file paths must be absolute.
    - For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
@@ -238,7 +238,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - ✅ "Are [edge cases/scenarios] addressed in requirements?"
    - ✅ "Does the spec define [missing aspect]?"
 
-6. **Structure Reference**: Generate the checklist following the canonical template in `.specify/templates/checklist-template.md` for title, meta section, category headings, and ID formatting. If template is unavailable, use: H1 title, purpose/created meta lines, `##` category sections containing `- [ ] CHK### <requirement item>` lines with globally incrementing IDs starting at CHK001.
+6. **Structure Reference**: Generate the checklist following the canonical template in `.spec/templates/checklist-template.md` for title, meta section, category headings, and ID formatting. If template is unavailable, use: H1 title, purpose/created meta lines, `##` category sections containing `- [ ] CHK### <requirement item>` lines with globally incrementing IDs starting at CHK001.
 
 7. **Report**: Output full path to checklist file, item count, and summarize whether the run created a new file or appended to an existing one. Summarize:
    - Focus areas selected
@@ -246,7 +246,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Actor/timing
    - Any explicit user-specified must-have items incorporated
 
-**Important**: Each `/speckit.checklist` command invocation uses a short, descriptive checklist filename and either creates a new file or appends to an existing one. This allows:
+**Important**: Each `/spec.checklist` command invocation uses a short, descriptive checklist filename and either creates a new file or appends to an existing one. This allows:
 
 - Multiple checklists of different types (e.g., `ux.md`, `test.md`, `security.md`)
 - Simple, memorable filenames that indicate checklist purpose
@@ -331,7 +331,7 @@ Sample items:
 ## Post-Execution Checks
 
 **Check for extension hooks (after checklist generation)**:
-Check if `.specify/extensions.yml` exists in the project root.
+Check if `.spec/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.after_checklist` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -358,4 +358,4 @@ Check if `.specify/extensions.yml` exists in the project root.
      Executing: `/{command}`
      EXECUTE_COMMAND: {command}
      ```
-- If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+- If no hooks are registered or `.spec/extensions.yml` does not exist, skip silently

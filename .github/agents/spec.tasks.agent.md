@@ -2,11 +2,11 @@
 description: Generate an actionable, dependency-ordered tasks.md for the feature based on available design artifacts.
 handoffs: 
   - label: Analyze For Consistency
-    agent: speckit.analyze
+    agent: spec.analyze
     prompt: Run a project analysis for consistency
     send: true
   - label: Implement Project
-    agent: speckit.implement
+    agent: spec.implement
     prompt: Start the implementation in phases
     send: true
 ---
@@ -22,7 +22,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution Checks
 
 **Check for extension hooks (before tasks generation)**:
-- Check if `.specify/extensions.yml` exists in the project root.
+- Check if `.spec/extensions.yml` exists in the project root.
 - If it exists, read it and look for entries under the `hooks.before_tasks` key
 - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
 - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -51,11 +51,11 @@ You **MUST** consider the user input before proceeding (if not empty).
       
       Wait for the result of the hook command before proceeding to the Outline.
       ```
-- If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+- If no hooks are registered or `.spec/extensions.yml` does not exist, skip silently
 
 ## Outline
 
-1. **Setup**: Run `.specify/scripts/powershell/check-prerequisites.ps1 -Json` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list. All paths must be absolute. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
+1. **Setup**: Run `.spec/scripts/powershell/check-prerequisites.ps1 -Json` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list. All paths must be absolute. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
 2. **Load design documents**: Read from FEATURE_DIR:
     - **Required**: plan.md (tech stack, libraries, structure), spec.md (user stories with priorities)
@@ -73,7 +73,7 @@ You **MUST** consider the user input before proceeding (if not empty).
     - Create parallel execution examples per user story
     - Validate task completeness (each user story has all needed tasks, independently testable)
 
-4. **Generate tasks.md**: Use `.specify/templates/tasks-template.md` as structure, fill with:
+4. **Generate tasks.md**: Use `.spec/templates/tasks-template.md` as structure, fill with:
     - Correct feature name from plan.md
     - Phase 1: Setup tasks (project initialization)
     - Phase 2: Foundational tasks (blocking prerequisites for all user stories)
@@ -94,7 +94,7 @@ You **MUST** consider the user input before proceeding (if not empty).
     - Suggested MVP scope (typically just User Story 1)
     - Format validation: Confirm ALL tasks follow the checklist format (checkbox, ID, labels, file paths)
 
-6. **Check for extension hooks**: After tasks.md is generated, check if `.specify/extensions.yml` exists in the project root.
+6. **Check for extension hooks**: After tasks.md is generated, check if `.spec/extensions.yml` exists in the project root.
     - If it exists, read it and look for entries under the `hooks.after_tasks` key
     - If the YAML cannot be parsed or is invalid, skip hook checking silently and continue normally
     - Filter out hooks where `enabled` is explicitly `false`. Treat hooks without an `enabled` field as enabled by default.
@@ -121,7 +121,7 @@ You **MUST** consider the user input before proceeding (if not empty).
           Executing: `/{command}`
           EXECUTE_COMMAND: {command}
           ```
-    - If no hooks are registered or `.specify/extensions.yml` does not exist, skip silently
+    - If no hooks are registered or `.spec/extensions.yml` does not exist, skip silently
 
 Context for task generation: $ARGUMENTS
 
