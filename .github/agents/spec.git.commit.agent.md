@@ -11,7 +11,7 @@ Automatically stage and commit all changes after a Spec command completes.
 This agent is designed to create meaningful Git commit messages that reflect the actual work done, not just generic file changes. It:
 
 1. Runs `git status --porcelain` to check if there are any pending changes
-2. If there are changes, runs `git diff HEAD` (and `git diff --cached` for staged files) to read the **actual content** of every change
+2. If there are changes, runs `git --no-pager diff HEAD` (and `git --no-pager diff --cached` for staged files) to read the **actual content** of every change
 3. Analyzes the full diff to understand **what actually changed** — e.g., a login feature was implemented, a spec was written, a bug was fixed — not just which files changed
 4. Selects the correct **conventional commit prefix** based on the nature of the change (see Prefix Guide below)
 5. Composes a concise, meaningful commit message that describes the real work done
@@ -25,8 +25,8 @@ First, check the size of the diff before reading everything:
 
 ```
 git status --porcelain
-git diff HEAD --stat
-git diff --cached --stat
+git --no-pager diff HEAD --stat
+git --no-pager diff --cached --stat
 ```
 
 Then use the following strategy based on diff size:
@@ -34,8 +34,8 @@ Then use the following strategy based on diff size:
 #### Small diff (< 300 changed lines total)
 Read the full diff — this is safe and gives the most accurate message:
 ```
-git diff HEAD
-git diff --cached
+git --no-pager diff HEAD
+git --no-pager diff --cached
 ```
 
 #### Medium diff (300 – 1500 changed lines)
@@ -47,16 +47,16 @@ Prioritize in this order:
 
 Read up to **5 key files** using:
 ```
-git diff HEAD -- <file>
+git --no-pager diff HEAD -- <file>
 ```
 
 #### Large diff (> 1500 changed lines)
 Do **not** read full file diffs. Instead:
-1. Run `git diff HEAD --stat` and `git diff HEAD --name-status` to see all changed files and their type (added/modified/deleted)
+1. Run `git --no-pager diff HEAD --stat` and `git --no-pager diff HEAD --name-status` to see all changed files and their type (added/modified/deleted)
 2. Group files by directory/module to identify the areas of the codebase affected
 3. Read only the **first 80 lines** of the diff for the 5 most significant files:
    ```
-   git diff HEAD -- <file> | head -80
+   git --no-pager diff HEAD -- <file> | head -80
    ```
 4. Use file paths, module names, and the partial diff to infer the overall nature of the change
 
