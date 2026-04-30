@@ -26,7 +26,8 @@ if (!agentName) {
 }
 
 // Ensure the session exists, track this agent run, then verify artifact deps when provided.
-if (runManageSession(["--action", "init"]) !== 0) process.exit(1);
+const initArgs = ["--action", "init", ...(agentName ? ["--agent-name", agentName] : [])];
+if (runManageSession(initArgs) !== 0) process.exit(1);
 if (runManageSession(["--action", "add-agent", "--agent-name", agentName]) !== 0) process.exit(1);
 if (artifactId && runManageSession(["--action", "check-deps", "--artifact-id", artifactId]) !== 0) process.exit(1);
 

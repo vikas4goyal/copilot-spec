@@ -14,6 +14,11 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
+
+1. **Initialize Git Repository** — Execute the `spec.git.initialize` sub-agent and wait for it to finish.
+2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for it to finish.
+
 ## Workflow State Guard
 
 Before doing any work, run:
@@ -32,12 +37,6 @@ If a prompt id is supplied by the user, pass it through:
 ```
 npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.constitution --artifact-id constitution --prompt-id <prompt-id>
 ```
-
-**Pre-Execution: Initialize Git Repository** _(must run first)_:
-- Execute the `spec.git.initialize` sub-agent and wait for it to finish before proceeding.
-
-**Pre-Execution: Initial Commit** _(run after git is initialized)_:
-- Execute the `spec.git.commit` sub-agent and wait for it to finish before proceeding.
 
 
 ## Outline
