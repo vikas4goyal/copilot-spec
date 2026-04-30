@@ -1,0 +1,17 @@
+{
+  "name": "spec-scripts-typescript",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TypeScript ports of .spec Python scripts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "run": "tsx"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
+

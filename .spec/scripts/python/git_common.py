@@ -42,8 +42,8 @@ def get_spec_kit_effective_branch_name(branch: str) -> str:
     Strip a remote prefix (e.g. 'origin/feature-x' → 'feature-x').
     For branch names without a slash the input is returned unchanged.
     """
-    m = re.match(r'^([^/]+)/([^/]+)$', branch)
-    return m.group(2) if m else branch
+    branch_with_remote_match = re.match(r'^([^/]+)/([^/]+)$', branch)
+    return branch_with_remote_match.group(2) if branch_with_remote_match else branch
 
 
 def test_feature_branch(branch: str, has_git: bool = True) -> bool:
@@ -58,7 +58,7 @@ def test_feature_branch(branch: str, has_git: bool = True) -> bool:
         )
         return True
 
-    raw = branch
+    original_branch = branch
     branch = get_spec_kit_effective_branch_name(branch)
 
     # Exclude malformed timestamps (7- or 8-digit date + 6-digit time, no trailing slug)
@@ -71,7 +71,7 @@ def test_feature_branch(branch: str, has_git: bool = True) -> bool:
 
     if not is_sequential and not is_timestamp:
         print(
-            f"ERROR: Not on a feature branch. Current branch: {raw}",
+            f"ERROR: Not on a feature branch. Current branch: {original_branch}",
             file=sys.stderr
         )
         print(

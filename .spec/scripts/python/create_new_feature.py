@@ -47,6 +47,7 @@ def _log(msg: str) -> None:
 
 
 def _git_run(args: list[str], repo_root: str, capture: bool = False):
+    """Run a git command in the repo root and optionally return stdout."""
     cmd = ["git", "-C", repo_root] + args
     if capture:
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -60,47 +61,49 @@ def _git_run(args: list[str], repo_root: str, capture: bool = False):
 # ---------------------------------------------------------------------------
 
 def get_unique_branch_name(base: str, repo_root: str, has_git: bool) -> str:
+    """Return a non-conflicting branch name using date/suffix fallbacks."""
     taken: set[str] = set()
     if has_git:
-        rc, out = _git_run(["branch", "--list", f"{base}*"], repo_root, capture=True)
-        if rc == 0:
-            for line in out.splitlines():
+        return_code, branch_output = _git_run(["branch", "--list", f"{base}*"], repo_root, capture=True)
+        if return_code == 0:
+            for line in branch_output.splitlines():
                 taken.add(line.strip().lstrip("*").strip())
-        rc, out = _git_run(["branch", "-r", "--list", f"*/{base}*"], repo_root, capture=True)
-        if rc == 0:
-            for line in out.splitlines():
+        return_code, remote_branch_output = _git_run(["branch", "-r", "--list", f"*/{base}*"], repo_root, capture=True)
+        if return_code == 0:
+            for line in remote_branch_output.splitlines():
                 taken.add(line.strip().split("/")[-1])
 
     if base not in taken:
         return base
-    ds = datetime.now().strftime("%Y%m%d")
-    dc = f"{base}-{ds}"
-    if dc not in taken:
-        return dc
-    n = 2
+    date_stamp = datetime.now().strftime("%Y%m%d")
+    dated_candidate = f"{base}-{date_stamp}"
+    if dated_candidate not in taken:
+        return dated_candidate
+    suffix = 2
     while True:
-        c = f"{base}-{ds}-{n}"
-        if c not in taken:
-            return c
-        n += 1
+        numbered_candidate = f"{base}-{date_stamp}-{suffix}"
+        if numbered_candidate not in taken:
+            return numbered_candidate
+        suffix += 1
 
 
 def get_unique_folder_name(base: str, specs_dir: Path) -> str:
-    ds     = datetime.now().strftime("%Y%m%d")
-    prefix = f"{ds}-{base}"
+    """Return a unique specs directory name with a date prefix."""
+    date_stamp = datetime.now().strftime("%Y%m%d")
+    prefix = f"{date_stamp}-{base}"
     taken: set[str] = set()
     if specs_dir.is_dir():
-        for d in specs_dir.iterdir():
-            if d.is_dir() and d.name.startswith(prefix):
-                taken.add(d.name)
+        for feature_path in specs_dir.iterdir():
+            if feature_path.is_dir() and feature_path.name.startswith(prefix):
+                taken.add(feature_path.name)
     if prefix not in taken:
         return prefix
-    n = 2
+    suffix = 2
     while True:
-        c = f"{prefix}-{n}"
-        if c not in taken:
-            return c
-        n += 1
+        numbered_candidate = f"{prefix}-{suffix}"
+        if numbered_candidate not in taken:
+            return numbered_candidate
+        suffix += 1
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +111,7 @@ def get_unique_folder_name(base: str, specs_dir: Path) -> str:
 # ---------------------------------------------------------------------------
 
 def write_result(branch: str, feat_dir: str, use_json: bool) -> None:
+    """Print resulting branch and feature directory in text or JSON format."""
     if use_json:
         print(json.dumps({
             "BRANCH_NAME": branch,
@@ -125,6 +129,7 @@ def write_result(branch: str, feat_dir: str, use_json: bool) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    """Create/sync feature branch + spec folder and update session metadata."""
     parser = argparse.ArgumentParser(
         description="Bootstrap a new feature branch and spec directory."
     )
@@ -156,10 +161,10 @@ def main() -> None:
     sess_branch   = ""
     sess_feat_dir = ""
 
-    rc, raw = _run_manage(["--action", "get-multi", "--fields", "name,branch_name,feature_dir"], capture=True)
-    if rc == 0 and raw:
+    return_code, raw_output = _run_manage(["--action", "get-multi", "--fields", "name,branch_name,feature_dir"], capture=True)
+    if return_code == 0 and raw_output:
         try:
-            sess_data     = json.loads(raw)
+            sess_data     = json.loads(raw_output)
             base_name     = sess_data.get("name", "") or ""
             sess_branch   = sess_data.get("branch_name", "") or ""
             sess_feat_dir = sess_data.get("feature_dir", "") or ""
@@ -182,9 +187,9 @@ def main() -> None:
     # Current git branch
     current_branch = ""
     if has_git:
-        rc, cb = _git_run(["rev-parse", "--abbrev-ref", "HEAD"], repo_root, capture=True)
-        if rc == 0:
-            current_branch = cb
+        return_code, current_branch_output = _git_run(["rev-parse", "--abbrev-ref", "HEAD"], repo_root, capture=True)
+        if return_code == 0:
+            current_branch = current_branch_output
     _log(f"Current git branch: {current_branch or 'none'}")
 
     # ── Idempotency check ────────────────────────────────────────────────────

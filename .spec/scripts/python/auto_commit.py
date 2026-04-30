@@ -19,11 +19,13 @@ from common import get_repo_root  # noqa: E402
 
 
 def _run(cmd: list[str], cwd: str) -> tuple[int, str]:
+    """Run a shell command and return (exit_code, combined_output)."""
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.returncode, (result.stdout + result.stderr).strip()
 
 
 def main() -> None:
+    """Stage all changes and create one commit when needed."""
     parser = argparse.ArgumentParser(
         description="Stage all changes and commit with the supplied message."
     )
@@ -38,14 +40,14 @@ def main() -> None:
     repo_root = get_repo_root()
 
     # Require git
-    rc, _ = _run(["git", "--version"], repo_root)
-    if rc != 0:
+    return_code, _ = _run(["git", "--version"], repo_root)
+    if return_code != 0:
         print("[auto-commit] Git not found; skipping commit.", file=sys.stderr)
         sys.exit(0)
 
     # Require a git repo
-    rc, _ = _run(["git", "rev-parse", "--is-inside-work-tree"], repo_root)
-    if rc != 0:
+    return_code, _ = _run(["git", "rev-parse", "--is-inside-work-tree"], repo_root)
+    if return_code != 0:
         print("[auto-commit] Not a Git repository; skipping commit.", file=sys.stderr)
         sys.exit(0)
 
@@ -61,15 +63,15 @@ def main() -> None:
         sys.exit(0)
 
     # Stage
-    rc, out = _run(["git", "add", "."], repo_root)
-    if rc != 0:
-        print(f"[auto-commit] git add failed: {out}", file=sys.stderr)
+    return_code, command_output = _run(["git", "add", "."], repo_root)
+    if return_code != 0:
+        print(f"[auto-commit] git add failed: {command_output}", file=sys.stderr)
         sys.exit(1)
 
     # Commit
-    rc, out = _run(["git", "commit", "-m", commit_message], repo_root)
-    if rc != 0:
-        print(f"[auto-commit] git commit failed: {out}", file=sys.stderr)
+    return_code, command_output = _run(["git", "commit", "-m", commit_message], repo_root)
+    if return_code != 0:
+        print(f"[auto-commit] git commit failed: {command_output}", file=sys.stderr)
         sys.exit(1)
 
     print("[auto-commit] Committed successfully.")

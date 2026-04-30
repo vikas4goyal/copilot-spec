@@ -15,6 +15,7 @@ from pathlib import Path
 
 
 def _log(msg: str) -> None:
+    """Print a consistently prefixed initialization log line."""
     print(f"[initialize-repo] {msg}")
 
 
@@ -36,11 +37,13 @@ def find_project_root(start_dir: str) -> str | None:
 
 
 def _run(cmd: list[str], cwd: str) -> tuple[int, str]:
+    """Run a git command and return (exit_code, combined_output)."""
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.returncode, (result.stdout + result.stderr).strip()
 
 
 def main() -> None:
+    """Initialize git repo in the detected project root with one initial commit."""
     script_dir = Path(__file__).parent
 
     repo_root = find_project_root(str(script_dir))
@@ -67,32 +70,32 @@ def main() -> None:
     _log("Git executable found")
 
     # Check if already a git repo
-    rc, _ = _run(["git", "rev-parse", "--is-inside-work-tree"], repo_root)
-    if rc == 0:
+    return_code, _ = _run(["git", "rev-parse", "--is-inside-work-tree"], repo_root)
+    if return_code == 0:
         _log("Repository already initialized; exiting early")
         print("[spec] Git repository already initialized; skipping", file=sys.stderr)
         sys.exit(0)
     _log("Current directory is not an initialized Git repository")
 
     # Initialize
-    rc, out = _run(["git", "init", "-q"], repo_root)
-    if rc != 0:
+    return_code, command_output = _run(["git", "init", "-q"], repo_root)
+    if return_code != 0:
         _log("Repository initialization failed; exiting with error")
-        print(f"[spec] Error: git init failed: {out}", file=sys.stderr)
+        print(f"[spec] Error: git init failed: {command_output}", file=sys.stderr)
         sys.exit(1)
     _log("git init completed successfully")
 
-    rc, out = _run(["git", "add", "."], repo_root)
-    if rc != 0:
+    return_code, command_output = _run(["git", "add", "."], repo_root)
+    if return_code != 0:
         _log("Repository initialization failed; exiting with error")
-        print(f"[spec] Error: git add failed: {out}", file=sys.stderr)
+        print(f"[spec] Error: git add failed: {command_output}", file=sys.stderr)
         sys.exit(1)
     _log("git add completed successfully")
 
-    rc, out = _run(["git", "commit", "--allow-empty", "-q", "-m", commit_msg], repo_root)
-    if rc != 0:
+    return_code, command_output = _run(["git", "commit", "--allow-empty", "-q", "-m", commit_msg], repo_root)
+    if return_code != 0:
         _log("Repository initialization failed; exiting with error")
-        print(f"[spec] Error: git commit failed: {out}", file=sys.stderr)
+        print(f"[spec] Error: git commit failed: {command_output}", file=sys.stderr)
         sys.exit(1)
     _log("git commit completed successfully")
 

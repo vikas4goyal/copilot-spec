@@ -20,6 +20,7 @@ from pathlib import Path
 
 
 def _no_remote(reason: str, use_json: bool) -> None:
+    """Emit a no-remote response and exit successfully."""
     if use_json:
         print(json.dumps({"has_remote": False, "is_github": False, "reason": reason}))
     else:
@@ -28,6 +29,7 @@ def _no_remote(reason: str, use_json: bool) -> None:
 
 
 def main() -> None:
+    """Detect remote.origin URL and parse GitHub owner/repo when possible."""
     parser = argparse.ArgumentParser(
         description="Detect Git remote URL and parse GitHub owner/repo."
     )
@@ -63,14 +65,14 @@ def main() -> None:
     repo  = ""
 
     # HTTPS: https://github.com/<owner>/<repo>[.git]
-    m = re.match(r'^https://github\.com/([^/]+)/([^/]+?)(?:\.git)?$', remote_url)
-    if m:
-        is_github, owner, repo = True, m.group(1), m.group(2)
+    https_match = re.match(r'^https://github\.com/([^/]+)/([^/]+?)(?:\.git)?$', remote_url)
+    if https_match:
+        is_github, owner, repo = True, https_match.group(1), https_match.group(2)
     else:
         # SSH: git@github.com:<owner>/<repo>[.git]
-        m = re.match(r'^git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$', remote_url)
-        if m:
-            is_github, owner, repo = True, m.group(1), m.group(2)
+        ssh_match = re.match(r'^git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$', remote_url)
+        if ssh_match:
+            is_github, owner, repo = True, ssh_match.group(1), ssh_match.group(2)
 
     if use_json:
         print(json.dumps({

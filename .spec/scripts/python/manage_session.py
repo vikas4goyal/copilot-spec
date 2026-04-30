@@ -48,20 +48,24 @@ VALID_ARTIFACT_FIELDS = ["summary", "handoff", "status", "outputPath"]
 # ---------------------------------------------------------------------------
 
 def _now_iso() -> str:
+    """Return current UTC time formatted for session timestamps."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _new_session_id() -> str:
-    ts   = datetime.now().strftime("%Y%m%d-%H%M%S")
-    rand = "".join(random.choices(string.ascii_letters, k=4))
-    return f"{ts}-{rand}"
+    """Generate a short unique session id using timestamp + random suffix."""
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    random_suffix = "".join(random.choices(string.ascii_letters, k=4))
+    return f"{timestamp}-{random_suffix}"
 
 
 def _read_session(session_file: Path) -> dict:
+    """Read and parse session JSON from disk."""
     return json.loads(session_file.read_text(encoding="utf-8"))
 
 
 def _save_session(session: dict, session_file: Path) -> None:
+    """Persist session JSON and refresh updated_at."""
     session["updated_at"] = _now_iso()
     session_file.write_text(
         json.dumps(session, indent=2, ensure_ascii=False),
@@ -137,6 +141,7 @@ def initialize_session(
     name: Optional[str] = None,
     description: Optional[str] = None,
 ) -> dict:
+    """Create a session from template or reuse an existing session file."""
     if not session_file.exists():
         if not template_file.exists():
             print(
@@ -174,6 +179,7 @@ def initialize_session(
 
 
 def get_field_value(session_file: Path, field_path: str) -> None:
+    """Print a single session field addressed by dot-notation path."""
     if not session_file.exists():
         print("[session] No active session.", file=sys.stderr)
         return
@@ -183,6 +189,7 @@ def get_field_value(session_file: Path, field_path: str) -> None:
 
 
 def get_multi_values(session_file: Path, field_paths: str) -> None:
+    """Print a JSON object with multiple session field values."""
     if not session_file.exists():
         print("[session] No active session.", file=sys.stderr)
         print("{}")
@@ -201,6 +208,7 @@ def update_session_field(
     field_path: str,
     value: Any,
 ) -> dict:
+    """Set a single session field and persist the updated session."""
     if not session_file.exists():
         initialize_session(session_file, template_file)
     session = _read_session(session_file)
@@ -215,6 +223,7 @@ def add_agent_to_session(
     template_file: Path,
     agent: str,
 ) -> dict:
+    """Record that an agent ran and set it as pipeline.current_agent."""
     if not session_file.exists():
         initialize_session(session_file, template_file)
     session = _read_session(session_file)
@@ -229,6 +238,7 @@ def add_agent_to_session(
 
 
 def complete_artifact(session_file: Path, artifact_id: str) -> dict:
+    """Mark an artifact complete, unblock dependents, and update pipeline hints."""
     if not session_file.exists():
         print("[session] No active session. Run 'init' first.", file=sys.stderr)
         sys.exit(1)
@@ -245,13 +255,13 @@ def complete_artifact(session_file: Path, artifact_id: str) -> dict:
     handoff = artifact.get("handoff")
 
     # Cascade: remove artifact_id from missingDeps of every other artifact
-    for a in artifacts:
-        missing = a.get("missingDeps", [])
+    for dependent_artifact in artifacts:
+        missing = dependent_artifact.get("missingDeps", [])
         if artifact_id in missing:
             missing.remove(artifact_id)
-            a["missingDeps"] = missing
-            if len(missing) == 0 and a.get("status") == "pending":
-                a["status"] = "ready"
+            dependent_artifact["missingDeps"] = missing
+            if len(missing) == 0 and dependent_artifact.get("status") == "pending":
+                dependent_artifact["status"] = "ready"
 
     pipeline = session.setdefault("pipeline", {})
     pipeline["last_completed"]  = artifact_id
@@ -262,8 +272,8 @@ def complete_artifact(session_file: Path, artifact_id: str) -> dict:
     _update_pipeline_next(session)
 
     required_pending = [
-        a for a in artifacts
-        if a.get("required") and a.get("status") not in ("complete", "skipped")
+        session_artifact for session_artifact in artifacts
+        if session_artifact.get("required") and session_artifact.get("status") not in ("complete", "skipped")
     ]
     session["isComplete"] = len(required_pending) == 0
 
@@ -278,6 +288,7 @@ def update_artifact(
     field: str,
     field_value: str,
 ) -> dict:
+    """Update one mutable field on a specific artifact."""
     if not session_file.exists():
         print("[session] No active session. Run 'init' first.", file=sys.stderr)
         sys.exit(1)
@@ -299,6 +310,7 @@ def update_artifact(
 
 
 def skip_artifact(session_file: Path, artifact_id: str) -> dict:
+    """Mark an artifact skipped and unblock dependents as needed."""
     if not session_file.exists():
         print("[session] No active session. Run 'init' first.", file=sys.stderr)
         sys.exit(1)
@@ -319,21 +331,21 @@ def skip_artifact(session_file: Path, artifact_id: str) -> dict:
     artifact["status"]      = "skipped"
     artifact["completedAt"] = now
 
-    for a in artifacts:
-        missing = a.get("missingDeps", [])
+    for dependent_artifact in artifacts:
+        missing = dependent_artifact.get("missingDeps", [])
         if artifact_id in missing:
             missing.remove(artifact_id)
-            a["missingDeps"] = missing
-            if len(missing) == 0 and a.get("status") == "pending":
-                a["status"] = "ready"
+            dependent_artifact["missingDeps"] = missing
+            if len(missing) == 0 and dependent_artifact.get("status") == "pending":
+                dependent_artifact["status"] = "ready"
 
     pipeline = session.setdefault("pipeline", {})
     pipeline["last_completed"] = artifact_id
     _update_pipeline_next(session)
 
     required_pending = [
-        a for a in artifacts
-        if a.get("required") and a.get("status") not in ("complete", "skipped")
+        session_artifact for session_artifact in artifacts
+        if session_artifact.get("required") and session_artifact.get("status") not in ("complete", "skipped")
     ]
     session["isComplete"] = len(required_pending) == 0
 
@@ -343,6 +355,7 @@ def skip_artifact(session_file: Path, artifact_id: str) -> dict:
 
 
 def check_artifact_deps(session_file: Path, artifact_id: str) -> bool:
+    """Return True when artifact dependencies are satisfied; print blockers otherwise."""
     if not session_file.exists():
         print("[session] No active session.", file=sys.stderr)
         sys.exit(1)
@@ -358,14 +371,21 @@ def check_artifact_deps(session_file: Path, artifact_id: str) -> bool:
         return True
 
     print(f"[session] '{artifact_id}' is blocked. Missing dependencies:", file=sys.stderr)
-    for dep in missing:
-        dep_art = next((a for a in session.get("artifacts", []) if a.get("id") == dep), None)
-        cmd     = dep_art.get("command", dep) if dep_art else dep
-        print(f"  → Run {cmd} first  (id: {dep})", file=sys.stderr)
+    for dependency_id in missing:
+        dependency_artifact = next(
+            (artifact_item for artifact_item in session.get("artifacts", []) if artifact_item.get("id") == dependency_id),
+            None,
+        )
+        dependency_command = (
+            dependency_artifact.get("command", dependency_id)
+            if dependency_artifact else dependency_id
+        )
+        print(f"  → Run {dependency_command} first  (id: {dependency_id})", file=sys.stderr)
     return False
 
 
 def archive_session(session_file: Path, repo_root: str) -> None:
+    """Move the active session into the feature archive location."""
     if not session_file.exists():
         print(f"[session] No active session file found at {session_file}", file=sys.stderr)
         return
@@ -392,6 +412,7 @@ def archive_session(session_file: Path, repo_root: str) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    """CLI entrypoint for session initialization, reads, and updates."""
     parser = argparse.ArgumentParser(
         description="Manage the active spec session state file (.spec/session.json)."
     )

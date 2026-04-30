@@ -26,12 +26,14 @@ SCRIPT_DIR = Path(__file__).parent
 
 
 def _run_manage(args: list[str]) -> int:
+    """Run manage_session.py and return its exit code."""
     return subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "manage_session.py")] + args
     ).returncode
 
 
 def main() -> None:
+    """Update artifact outputs and mark the artifact complete."""
     parser = argparse.ArgumentParser(
         description="Standardized post-execution session step for a spec workflow agent."
     )
@@ -56,9 +58,9 @@ def main() -> None:
             "--artifact-value", parsed.handoff,
         ])
 
-    rc = _run_manage(["--action", "complete-artifact", "--artifact-id", parsed.artifact_id])
-    if rc != 0:
-        sys.exit(rc)
+    return_code = _run_manage(["--action", "complete-artifact", "--artifact-id", parsed.artifact_id])
+    if return_code != 0:
+        sys.exit(return_code)
 
 
 if __name__ == "__main__":

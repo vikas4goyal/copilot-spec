@@ -21,11 +21,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 def _run(cmd: list[str], cwd: str) -> tuple[int, str]:
+    """Run a command and return (exit_code, combined_output)."""
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     return result.returncode, (result.stdout + result.stderr).strip()
 
 
 def main() -> None:
+    """Push feature branch, archive session, and optionally checkout base branch."""
     parser = argparse.ArgumentParser(
         description="Finalize a spec feature release."
     )
@@ -61,32 +63,32 @@ def main() -> None:
     has_git = False
     try:
         subprocess.run(["git", "--version"], capture_output=True, check=False)
-        rc, _ = _run(["git", "-C", repo_root, "rev-parse", "--is-inside-work-tree"], repo_root)
-        has_git = (rc == 0)
+        return_code, _ = _run(["git", "-C", repo_root, "rev-parse", "--is-inside-work-tree"], repo_root)
+        has_git = (return_code == 0)
     except FileNotFoundError:
         pass
 
     # Push to origin
     if has_git:
-        rc, remote_url = _run(["git", "-C", repo_root, "config", "--get", "remote.origin.url"], repo_root)
-        if rc == 0 and remote_url.strip():
+        return_code, remote_url = _run(["git", "-C", repo_root, "config", "--get", "remote.origin.url"], repo_root)
+        if return_code == 0 and remote_url.strip():
             print(f"[release] Pushing branch: {branch_name}")
-            rc, out = _run(
+            return_code, push_output = _run(
                 ["git", "-C", repo_root, "push", "origin", branch_name, "--set-upstream"],
                 repo_root
             )
-            if rc != 0:
-                print(f"[release] Push failed; continuing with archive. ({out})", file=sys.stderr)
+            if return_code != 0:
+                print(f"[release] Push failed; continuing with archive. ({push_output})", file=sys.stderr)
         else:
             print("[release] No remote 'origin' found — skipping push. Branch is available locally only.")
     else:
         print("[release] Git not available — skipping push.")
 
     # Archive session
-    rc = subprocess.run(
+    archive_return_code = subprocess.run(
         [sys.executable, str(script_dir / "manage_session.py"), "--action", "archive"]
     ).returncode
-    if rc != 0:
+    if archive_return_code != 0:
         print("[release] Warning: archive step returned non-zero.", file=sys.stderr)
 
     # Switch to base branch
@@ -96,8 +98,8 @@ def main() -> None:
         and base_branch != branch_name
         and has_git
     ):
-        rc, _ = _run(["git", "-C", repo_root, "checkout", base_branch], repo_root)
-        if rc == 0:
+        return_code, _ = _run(["git", "-C", repo_root, "checkout", base_branch], repo_root)
+        if return_code == 0:
             print(f"[release] Switched to base branch: {base_branch}")
 
     base_display = base_branch or "<none>"

@@ -124,22 +124,22 @@ def get_current_branch(repo_root: Optional[str] = None) -> str:
         latest_feature = ""
         highest_seq = 0
         latest_ts = ""
-        for d in specs_dir.iterdir():
-            if not d.is_dir():
+        for feature_path in specs_dir.iterdir():
+            if not feature_path.is_dir():
                 continue
-            name = d.name
-            m_ts = re.match(r'^(\d{8}-\d{6})-', name)
-            m_seq = re.match(r'^(\d{3,})-', name)
-            if m_ts:
-                ts = m_ts.group(1)
-                if ts > latest_ts:
-                    latest_ts = ts
-                    latest_feature = name
-            elif m_seq and not latest_ts:
-                num = int(m_seq.group(1))
-                if num > highest_seq:
-                    highest_seq = num
-                    latest_feature = name
+            feature_name = feature_path.name
+            timestamp_match = re.match(r'^(\d{8}-\d{6})-', feature_name)
+            sequence_match = re.match(r'^(\d{3,})-', feature_name)
+            if timestamp_match:
+                timestamp_prefix = timestamp_match.group(1)
+                if timestamp_prefix > latest_ts:
+                    latest_ts = timestamp_prefix
+                    latest_feature = feature_name
+            elif sequence_match and not latest_ts:
+                sequence_number = int(sequence_match.group(1))
+                if sequence_number > highest_seq:
+                    highest_seq = sequence_number
+                    latest_feature = feature_name
         if latest_feature:
             return latest_feature
 
@@ -185,6 +185,7 @@ def test_feature_branch(branch: str, has_git: bool = True) -> bool:
 # ---------------------------------------------------------------------------
 
 def get_feature_dir(repo_root: str, branch: str) -> str:
+    """Return the default feature directory path for a given branch name."""
     return str(Path(repo_root) / "specs" / branch)
 
 
@@ -212,29 +213,33 @@ def get_feature_paths_env() -> dict:
         )
     elif feature_json_path.exists():
         try:
-            data = json.loads(feature_json_path.read_text(encoding="utf-8"))
-            fd = data.get("feature_directory", "")
-            if fd:
-                feature_dir = fd if Path(fd).is_absolute() else str(Path(repo_root) / fd)
+            feature_config = json.loads(feature_json_path.read_text(encoding="utf-8"))
+            feature_directory_value = feature_config.get("feature_directory", "")
+            if feature_directory_value:
+                feature_dir = (
+                    feature_directory_value
+                    if Path(feature_directory_value).is_absolute()
+                    else str(Path(repo_root) / feature_directory_value)
+                )
         except Exception:
             pass
 
     if feature_dir is None:
         feature_dir = get_feature_dir(repo_root, current_branch)
 
-    fd = Path(feature_dir)
+    feature_path = Path(feature_dir)
     return {
         "REPO_ROOT":      repo_root,
         "CURRENT_BRANCH": current_branch,
         "HAS_GIT":        has_git_val,
-        "FEATURE_DIR":    str(fd),
-        "FEATURE_SPEC":   str(fd / "spec.md"),
-        "IMPL_PLAN":      str(fd / "plan.md"),
-        "TASKS":          str(fd / "tasks.md"),
-        "RESEARCH":       str(fd / "research.md"),
-        "DATA_MODEL":     str(fd / "data-model.md"),
-        "QUICKSTART":     str(fd / "quickstart.md"),
-        "CONTRACTS_DIR":  str(fd / "contracts"),
+        "FEATURE_DIR":    str(feature_path),
+        "FEATURE_SPEC":   str(feature_path / "spec.md"),
+        "IMPL_PLAN":      str(feature_path / "plan.md"),
+        "TASKS":          str(feature_path / "tasks.md"),
+        "RESEARCH":       str(feature_path / "research.md"),
+        "DATA_MODEL":     str(feature_path / "data-model.md"),
+        "QUICKSTART":     str(feature_path / "quickstart.md"),
+        "CONTRACTS_DIR":  str(feature_path / "contracts"),
     }
 
 
@@ -243,6 +248,7 @@ def get_feature_paths_env() -> dict:
 # ---------------------------------------------------------------------------
 
 def test_file_exists(path: str, description: str) -> bool:
+    """Print a status line and return whether a file exists at *path*."""
     if Path(path).is_file():
         print(f"  [OK] {description}")
         return True
@@ -251,8 +257,9 @@ def test_file_exists(path: str, description: str) -> bool:
 
 
 def test_dir_has_files(path: str, description: str) -> bool:
-    p = Path(path)
-    if p.is_dir() and any(f.is_file() for f in p.iterdir()):
+    """Print a status line and return whether a directory contains files."""
+    directory_path = Path(path)
+    if directory_path.is_dir() and any(entry.is_file() for entry in directory_path.iterdir()):
         print(f"  [OK] {description}")
         return True
     print(f"  [FAIL] {description}")
@@ -286,8 +293,8 @@ def resolve_template(template_name: str, repo_root: str) -> Optional[str]:
         registry_file = presets_dir / ".registry"
         if registry_file.exists():
             try:
-                reg = json.loads(registry_file.read_text(encoding="utf-8"))
-                presets = reg.get("presets", {})
+                registry_data = json.loads(registry_file.read_text(encoding="utf-8"))
+                presets = registry_data.get("presets", {})
                 sorted_presets = sorted(
                     presets.keys(),
                     key=lambda k: presets[k].get("priority", 10) if isinstance(presets[k], dict) else 10,

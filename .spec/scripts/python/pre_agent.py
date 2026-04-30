@@ -22,12 +22,14 @@ SCRIPT_DIR = Path(__file__).parent
 
 
 def _run_manage(args: list[str]) -> int:
+    """Run manage_session.py and return its exit code."""
     return subprocess.run(
         [sys.executable, str(SCRIPT_DIR / "manage_session.py")] + args
     ).returncode
 
 
 def main() -> None:
+    """Prepare session state before an agent run and mark artifact in progress."""
     parser = argparse.ArgumentParser(
         description="Standardized pre-execution session step for a spec workflow agent."
     )
@@ -43,13 +45,13 @@ def main() -> None:
     ]
     if parsed.artifact_id:
         bootstrap_args += ["--artifact-id", parsed.artifact_id]
-    rc = subprocess.run(bootstrap_args).returncode
-    if rc != 0:
+    return_code = subprocess.run(bootstrap_args).returncode
+    if return_code != 0:
         sys.exit(1)
 
     # 2. Mark artifact in_progress
     if parsed.artifact_id:
-        rc = _run_manage([
+        _run_manage([
             "--action", "update-artifact",
             "--artifact-id", parsed.artifact_id,
             "--artifact-field", "status",

@@ -27,6 +27,7 @@ from pathlib import Path
 
 
 def _no_branch(reason: str, use_json: bool) -> None:
+    """Emit a graceful skip response and exit with code 0."""
     if use_json:
         print(json.dumps({"valid": False, "reason": reason}))
     else:
@@ -35,6 +36,7 @@ def _no_branch(reason: str, use_json: bool) -> None:
 
 
 def main() -> None:
+    """Validate feature branch naming and report matching spec directory."""
     parser = argparse.ArgumentParser(
         description="Validate current git branch follows feature branch naming conventions."
     )
@@ -81,11 +83,11 @@ def main() -> None:
 
     prefix = ""
     if re.match(sequential_re, branch):
-        m = re.match(r'^[0-9]{3,}', branch)
-        prefix = m.group(0) if m else ""
+        sequential_prefix_match = re.match(r'^[0-9]{3,}', branch)
+        prefix = sequential_prefix_match.group(0) if sequential_prefix_match else ""
     elif re.match(timestamp_re, branch):
-        m = re.match(r'^[0-9]{8}-[0-9]{6}', branch)
-        prefix = m.group(0) if m else ""
+        timestamp_prefix_match = re.match(r'^[0-9]{8}-[0-9]{6}', branch)
+        prefix = timestamp_prefix_match.group(0) if timestamp_prefix_match else ""
     else:
         if use_json:
             print(json.dumps({
