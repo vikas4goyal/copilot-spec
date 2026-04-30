@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "description": "TypeScript ports of .spec Python scripts",
   "scripts": {
-    "typecheck": "typescript/node_modules/.bin/tsc --noEmit",
-    "build": "typescript/node_modules/.bin/tsc -p tsconfig.json",
+    "typecheck": "node_modules/.bin/tsc --noEmit",
+    "build": "node_modules/.bin/tsc -p tsconfig.json",
     "prerun": "npm install --silent",
-    "run": "typescript/node_modules/.bin/tsx"
+    "run": "node_modules/.bin/tsx"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

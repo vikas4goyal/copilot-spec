@@ -10,16 +10,31 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+## Workflow State Guard
+
+Before doing any work, run:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.analyze --artifact-id analyze
+```
+
+If the script output contains `"ok": false`:
+- Stop immediately.
+- Do not modify files.
+- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+
+If a prompt id is supplied by the user, pass it through:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.analyze --artifact-id analyze --prompt-id <prompt-id>
+```
+
 ## Pre-Execution Checks
 
 _(run in order, every time)_
 
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
-3. **Start Session Step** — Run the pre-agent script:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.analyze --artifact-id analyze`
-
-   The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Goal
 
@@ -173,14 +188,22 @@ At end of report, output a concise Next Actions block:
 
 Ask the user: "Would you like me to suggest concrete remediation edits for the top N issues?" (Do NOT apply them automatically.)
 
-## Post-Execution Checks
+## Workflow Handoff Update
 
-_(run in order, after the main Execution Steps complete)_
+After successful completion, run:
 
-1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./post_agent.ts --artifact-id analyze --summary "..." --handoff "..."`
+```
+npm --prefix .spec/scripts run run -- ./post_agent.ts \
+  --artifact-id analyze \
+  --summary "<one sentence: e.g. 'Analysis found 2 critical issues and 3 coverage gaps.'>" \
+  --handoff-agent spec.implement \
+  --handoff "Execute the implementation plan by processing and executing all tasks defined in tasks.md."
+```
 
-   Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
+The post-agent script is responsible for:
+- marking the artifact complete (analyze is read-only; does not stale downstream unless remediation was accepted)
+- calculating eligible agents and creating the next prompt record
+- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
 
 2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.
 

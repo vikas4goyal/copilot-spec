@@ -10,16 +10,31 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+## Workflow State Guard
+
+Before doing any work, run:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.implement --artifact-id implement
+```
+
+If the script output contains `"ok": false`:
+- Stop immediately.
+- Do not modify files.
+- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+
+If a prompt id is supplied by the user, pass it through:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.implement --artifact-id implement --prompt-id <prompt-id>
+```
+
 ## Pre-Execution Checks
 
 _(run in order, every time)_
 
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
-3. **Start Session Step** — Run the pre-agent script:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.implement --artifact-id implement`
-
-   The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Outline
 
@@ -145,13 +160,22 @@ _(run in order, every time)_
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/spec.tasks` first to regenerate the task list.
 
-## Post-Execution Checks
+## Workflow Handoff Update
 
-_(run in order, after the main Outline completes)_
+After successful completion, run:
 
-1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./post_agent.ts --artifact-id implement --summary "..." --handoff "..."`
+```
+npm --prefix .spec/scripts run run -- ./post_agent.ts \
+  --artifact-id implement \
+  --summary "<one sentence describing what was built>" \
+  --handoff-agent spec.release \
+  --handoff "Finalize and release the current feature: push the branch, archive the session, and reset the workspace."
+```
 
-   Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
+The post-agent script is responsible for:
+- marking the artifact complete and incrementing revision
+- marking release stale/blocked as needed
+- calculating eligible agents and creating the next prompt record
+- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
 
 2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.

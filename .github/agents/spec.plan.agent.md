@@ -18,16 +18,31 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+## Workflow State Guard
+
+Before doing any work, run:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan
+```
+
+If the script output contains `"ok": false`:
+- Stop immediately.
+- Do not modify files.
+- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+
+If a prompt id is supplied by the user, pass it through:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan --prompt-id <prompt-id>
+```
+
 ## Pre-Execution Checks
 
 _(run in order, every time)_
 
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
-3. **Start Session Step** — Run the pre-agent script:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan`
-
-   The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Outline
 
@@ -46,14 +61,35 @@ _(run in order, every time)_
 
 4. **Stop and report**: Command ends after Phase 2 planning. Report branch, IMPL_PLAN path, and generated artifacts.
 
-## Post-Execution Checks
+## Workflow Handoff Update
 
-_(run in order, after the main Outline completes)_
+After successful completion, run:
 
-1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./post_agent.ts --artifact-id plan --summary "..." --handoff "..."`
+```
+npm --prefix .spec/scripts run run -- ./post_agent.ts \
+  --artifact-id plan \
+  --summary "<one sentence describing the plan produced>" \
+  --output-path "<feature_dir>/plan.md" \
+  --handoff-agent spec.tasks \
+  --handoff "Generate dependency-ordered implementation tasks from the current plan."
+```
 
-   Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
+If new governance-sensitive technology was discovered during planning and a constitution update is needed, pass a workflow request:
+
+```
+npm --prefix .spec/scripts run run -- ./post_agent.ts \
+  --artifact-id plan \
+  --summary "..." \
+  --handoff-agent spec.tasks \
+  --handoff "..." \
+  --workflow-request-json '{"recommend":"/spec.constitution","reason":"New library choice requires governance update"}'
+```
+
+The post-agent script is responsible for:
+- marking the artifact complete and incrementing revision if plan changed
+- marking tasks, analyze, implement, release stale if plan changed
+- calculating eligible agents and creating the next prompt record
+- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
 
 2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.
 

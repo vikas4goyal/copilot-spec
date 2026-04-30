@@ -3,6 +3,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";
 import { getRepoRoot } from "./common";
+import {
+  loadSession,
+  calculateWorkflowState,
+} from "./workflow";
 
 type Json = Record<string, unknown>;
 
@@ -90,22 +94,6 @@ function mergePatch(target: Json, patch: Json): void {
   }
 }
 
-function updatePipelineNext(session: Json): void {
-  const pipeline = (session.pipeline as Json | undefined) ?? {};
-  const completedId = pipeline.last_completed as string | undefined;
-  const artifacts = (session.artifacts as Json[] | undefined) ?? [];
-
-  // Prefer required ready artifacts; otherwise pick the first ready artifact.
-  let nextArtifact = artifacts.find((artifact) => {
-    return artifact.status === "ready" && Boolean(artifact.required) && artifact.id !== completedId;
-  });
-  if (!nextArtifact) {
-    nextArtifact = artifacts.find((artifact) => artifact.status === "ready" && artifact.id !== completedId);
-  }
-
-  session.pipeline = pipeline;
-  pipeline.next_recommended = nextArtifact?.command ?? null;
-}
 
 function initializeSession(sessionFile: string, templateFile: string, name?: string, description?: string): Json {
   if (!fs.existsSync(sessionFile)) {
@@ -198,9 +186,9 @@ function completeArtifact(sessionFile: string, artifactId: string): Json {
     console.error("[session] No active session. Run 'init' first.");
     process.exit(1);
   }
-  const session = readSession(sessionFile);
-  const artifacts = ((session.artifacts as Json[] | undefined) ?? []) as Json[];
-  const artifact = artifacts.find((a) => a.id === artifactId);
+  // Use workflow.ts loadSession for migration support
+  const session = loadSession(sessionFile, getRepoRoot());
+  const artifact = session.artifacts[artifactId];
   if (!artifact) {
     console.error(`[session] Artifact '${artifactId}' not found in session.`);
     process.exit(1);
@@ -208,36 +196,28 @@ function completeArtifact(sessionFile: string, artifactId: string): Json {
 
   const now = nowIso();
   artifact.status = "complete";
-  artifact.completedAt = now;
-  const handoff = artifact.handoff;
+  artifact.completed_at = now;
 
-  // Completing an artifact may unblock downstream artifacts.
-  for (const dependentArtifact of artifacts) {
-    const missing = ((dependentArtifact.missingDeps as string[] | undefined) ?? []) as string[];
-    const idx = missing.indexOf(artifactId);
-    if (idx >= 0) {
-      missing.splice(idx, 1);
-      dependentArtifact.missingDeps = missing;
-      if (missing.length === 0 && dependentArtifact.status === "pending") dependentArtifact.status = "ready";
-    }
-  }
-
-  const pipeline = ((session.pipeline as Json | undefined) ?? {}) as Json;
+  const pipeline = session.pipeline;
   pipeline.last_completed = artifactId;
   pipeline.current_agent = null;
-  if (handoff) pipeline.next_prompt = handoff;
-  session.pipeline = pipeline;
+  if ((artifact as unknown as Json).handoff) pipeline.next_prompt = (artifact as unknown as Json).handoff as string;
 
-  updatePipelineNext(session);
-
-  const requiredPending = artifacts.filter((artifactItem) => {
-    return Boolean(artifactItem.required) && artifactItem.status !== "complete" && artifactItem.status !== "skipped";
-  });
+  // Recompute completeness
+  const requiredPending = Object.entries(session.artifacts).filter(
+    ([, a]) => a.required && a.status !== "complete" && a.status !== "skipped",
+  );
   session.isComplete = requiredPending.length === 0;
 
+  // Recalculate next recommended via workflow state
+  const ws = calculateWorkflowState(session, getRepoRoot());
+  pipeline.next_recommended = ws.next_recommended;
+  pipeline.eligible_agents = ws.eligible_agents;
+  pipeline.blocked_agents = ws.blocked_agents;
+
   saveSession(session, sessionFile);
-  console.log(`[session] Artifact '${artifactId}' marked complete. Next: ${String((session.pipeline as Json).next_recommended)}`);
-  return session;
+  console.log(`[session] Artifact '${artifactId}' marked complete. Next: ${pipeline.next_recommended ?? "none"}`);
+  return session as unknown as Json;
 }
 
 function updateArtifact(sessionFile: string, artifactId: string, field: string, fieldValue: string): Json {
@@ -245,20 +225,22 @@ function updateArtifact(sessionFile: string, artifactId: string, field: string, 
     console.error("[session] No active session. Run 'init' first.");
     process.exit(1);
   }
-  if (!VALID_ARTIFACT_FIELDS.has(field)) {
-    console.error(`[session] Invalid ArtifactField '${field}'. Valid: ${Array.from(VALID_ARTIFACT_FIELDS).join(", ")}`);
+  // Extend valid fields to include new schema fields
+  const extendedValidFields = new Set([...VALID_ARTIFACT_FIELDS, "revision", "reason", "started_at", "completed_at"]);
+  if (!extendedValidFields.has(field)) {
+    console.error(`[session] Invalid ArtifactField '${field}'. Valid: ${Array.from(extendedValidFields).join(", ")}`);
     process.exit(1);
   }
-  const session = readSession(sessionFile);
-  const artifact = ((session.artifacts as Json[] | undefined) ?? []).find((artifactItem) => artifactItem.id === artifactId);
+  const session = loadSession(sessionFile, getRepoRoot());
+  const artifact = session.artifacts[artifactId];
   if (!artifact) {
     console.error(`[session] Artifact '${artifactId}' not found.`);
     process.exit(1);
   }
-  artifact[field] = fieldValue;
+  (artifact as unknown as Json)[field] = fieldValue;
   saveSession(session, sessionFile);
   console.log(`[session] Artifact '${artifactId}'.${field} updated.`);
-  return session;
+  return session as unknown as Json;
 }
 
 function skipArtifact(sessionFile: string, artifactId: string): Json {
@@ -266,9 +248,8 @@ function skipArtifact(sessionFile: string, artifactId: string): Json {
     console.error("[session] No active session. Run 'init' first.");
     process.exit(1);
   }
-  const session = readSession(sessionFile);
-  const artifacts = ((session.artifacts as Json[] | undefined) ?? []) as Json[];
-  const artifact = artifacts.find((a) => a.id === artifactId);
+  const session = loadSession(sessionFile, getRepoRoot());
+  const artifact = session.artifacts[artifactId];
   if (!artifact) {
     console.error(`[session] Artifact '${artifactId}' not found.`);
     process.exit(1);
@@ -279,31 +260,23 @@ function skipArtifact(sessionFile: string, artifactId: string): Json {
   }
 
   artifact.status = "skipped";
-  artifact.completedAt = nowIso();
+  artifact.completed_at = nowIso();
 
-  for (const dependentArtifact of artifacts) {
-    const missing = ((dependentArtifact.missingDeps as string[] | undefined) ?? []) as string[];
-    const idx = missing.indexOf(artifactId);
-    if (idx >= 0) {
-      missing.splice(idx, 1);
-      dependentArtifact.missingDeps = missing;
-      if (missing.length === 0 && dependentArtifact.status === "pending") dependentArtifact.status = "ready";
-    }
-  }
-
-  const pipeline = ((session.pipeline as Json | undefined) ?? {}) as Json;
+  const pipeline = session.pipeline;
   pipeline.last_completed = artifactId;
-  session.pipeline = pipeline;
-  updatePipelineNext(session);
 
-  const requiredPending = artifacts.filter((artifactItem) => {
-    return Boolean(artifactItem.required) && artifactItem.status !== "complete" && artifactItem.status !== "skipped";
-  });
+  const ws = calculateWorkflowState(session, getRepoRoot());
+  pipeline.next_recommended = ws.next_recommended;
+  pipeline.eligible_agents = ws.eligible_agents;
+
+  const requiredPending = Object.entries(session.artifacts).filter(
+    ([, a]) => a.required && a.status !== "complete" && a.status !== "skipped",
+  );
   session.isComplete = requiredPending.length === 0;
 
   saveSession(session, sessionFile);
-  console.log(`[session] Artifact '${artifactId}' skipped. Next: ${String((session.pipeline as Json).next_recommended)}`);
-  return session;
+  console.log(`[session] Artifact '${artifactId}' skipped. Next: ${pipeline.next_recommended ?? "none"}`);
+  return session as unknown as Json;
 }
 
 function checkArtifactDeps(sessionFile: string, artifactId: string): boolean {
@@ -311,27 +284,26 @@ function checkArtifactDeps(sessionFile: string, artifactId: string): boolean {
     console.error("[session] No active session.");
     process.exit(1);
   }
-  const session = readSession(sessionFile);
-  const artifact = ((session.artifacts as Json[] | undefined) ?? []).find((artifactItem) => artifactItem.id === artifactId);
+  const session = loadSession(sessionFile, getRepoRoot());
+  const artifact = session.artifacts[artifactId];
   if (!artifact) {
     console.error(`[session] Artifact '${artifactId}' not found.`);
     process.exit(1);
   }
 
-  const missing = ((artifact.missingDeps as string[] | undefined) ?? []) as string[];
-  if (missing.length === 0) {
-    console.log(`[session] '${artifactId}' is ready - all dependencies met.`);
-    return true;
+  // Use workflow state to determine if blocked
+  const ws = calculateWorkflowState(session, getRepoRoot());
+  const { COMMAND_REGISTRY } = require("./workflow") as typeof import("./workflow");
+  const def = COMMAND_REGISTRY[artifactId];
+  const command = def?.command ?? `/${artifactId}`;
+
+  if (command in ws.blocked_agents) {
+    console.error(`[session] '${artifactId}' is blocked: ${ws.blocked_agents[command]}`);
+    return false;
   }
 
-  console.error(`[session] '${artifactId}' is blocked. Missing dependencies:`);
-  const artifacts = ((session.artifacts as Json[] | undefined) ?? []) as Json[];
-  for (const dependencyId of missing) {
-    const dependencyArtifact = artifacts.find((artifactItem) => artifactItem.id === dependencyId);
-    const recommendedCommand = (dependencyArtifact?.command as string | undefined) ?? dependencyId;
-    console.error(`  -> Run ${recommendedCommand} first  (id: ${dependencyId})`);
-  }
-  return false;
+  console.log(`[session] '${artifactId}' is ready — all dependencies met.`);
+  return true;
 }
 
 function archiveSession(sessionFile: string, repoRoot: string): void {

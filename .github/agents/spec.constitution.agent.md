@@ -14,7 +14,24 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
-## Pre-Execution Checks
+## Workflow State Guard
+
+Before doing any work, run:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.constitution --artifact-id constitution
+```
+
+If the script output contains `"ok": false`:
+- Stop immediately.
+- Do not modify files.
+- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+
+If a prompt id is supplied by the user, pass it through:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.constitution --artifact-id constitution --prompt-id <prompt-id>
+```
 
 **Pre-Execution: Initialize Git Repository** _(must run first)_:
 - Execute the `spec.git.initialize` sub-agent and wait for it to finish before proceeding.
@@ -22,16 +39,6 @@ You **MUST** consider the user input before proceeding (if not empty).
 **Pre-Execution: Initial Commit** _(run after git is initialized)_:
 - Execute the `spec.git.commit` sub-agent and wait for it to finish before proceeding.
 
-**Pre-Execution: Bootstrap Session State** _(run after git steps are complete)_:
-- Execute the `spec.session.init` sub-agent, forwarding the user's `$ARGUMENTS` as high-level context. Wait for it to finish before proceeding.
-  - The session init agent initializes `.spec/session.json`, records `spec.constitution` as the running agent, and can derive `name`, `description`, and `branch_name` from the provided arguments.
-
-**Pre-Execution: Register as Running**:
-- Execute the `spec.session.manage` sub-agent with the following payload and wait for it to finish.
-  If any dependency is reported missing, **stop and inform the user** before proceeding.
-  ```json
-  { "action": "start", "artifactId": "constitution" }
-  ```
 
 ## Outline
 
@@ -102,25 +109,26 @@ If critical info missing (e.g., ratification date truly unknown), insert `TODO(<
 
 Do not create a new template; always operate on the existing `.spec/memory/constitution.md` file.
 
-## Post-Execution Checks
+## Workflow Handoff Update
+
+After successful completion, run:
+
+```
+npm --prefix .spec/scripts run run -- ./post_agent.ts \
+  --artifact-id constitution \
+  --summary "<one sentence: e.g. 'Constitution amended to v1.2.0: added Observability principle.'>" \
+  --handoff-agent spec.specify \
+  --handoff "<what the next agent needs>"
+```
+
+The post-agent script is responsible for:
+- marking the artifact complete and incrementing revision if changed
+- recording prompt usage and updating based_on revisions
+- marking downstream artifacts stale if constitution changed
+- calculating eligible agents and creating the next prompt record
+- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
 
 **Post-Execution: Commit Changes**:
 - Execute the `spec.git.commit` sub-agent and wait for it to finish.
 
-**Post-Execution: Update Session State**:
-- Execute the `spec.session.manage` sub-agent with the payload below, populated from the actual results of this run. Wait for it to finish.
-
-  ```json
-  {
-    "action": "complete",
-    "artifactId": "constitution",
-    "summary": "<one sentence, e.g.: 'Constitution amended to v1.2.0: added Observability principle.'>",
-    "next": {
-      "agent": "spec.specify",
-      "prompt": "<what the next agent needs, e.g.: 'Constitution v1.2.0 in effect. Observability and versioning principles must be reflected in spec requirements.'>"
-    }
-  }
-  ```
-
-  Replace the angle-bracket placeholders with real values from this run. Do not forward template text as-is.
 

@@ -10,6 +10,25 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+## Workflow State Guard
+
+Before doing any work, run:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.release --artifact-id release
+```
+
+If the script output contains `"ok": false`:
+- Stop immediately.
+- Do not modify files.
+- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+
+To override blocking checks (e.g. releasing before implement is fully complete):
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.release --artifact-id release --force
+```
+
 ## Purpose
 
 `spec.release` is the **final step** in any spec workflow. It:
@@ -62,6 +81,20 @@ The script handles all degradation cases:
 ├── templates/
 └── memory/
 ```
+
+## Workflow Handoff Update
+
+After the release script runs, mark the release artifact complete:
+
+```
+npm --prefix .spec/scripts run run -- ./post_agent.ts \
+  --artifact-id release \
+  --summary "Feature released: branch pushed, session archived." \
+  --handoff-agent spec.specify \
+  --handoff "Start a new feature with /spec.specify or update the project constitution with /spec.constitution."
+```
+
+The post-agent script marks the session `isComplete = true` once all required artifacts are done.
 
 ## Output Summary
 

@@ -19,16 +19,31 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
+## Workflow State Guard
+
+Before doing any work, run:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.tasks --artifact-id tasks
+```
+
+If the script output contains `"ok": false`:
+- Stop immediately.
+- Do not modify files.
+- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+
+If a prompt id is supplied by the user, pass it through:
+
+```
+npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.tasks --artifact-id tasks --prompt-id <prompt-id>
+```
+
 ## Pre-Execution Checks
 
 _(run in order, every time)_
 
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
-3. **Start Session Step** — Run the pre-agent script:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.tasks --artifact-id tasks`
-
-   The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Outline
 
@@ -75,14 +90,24 @@ Context for task generation: $ARGUMENTS
 
 The tasks.md should be immediately executable - each task must be specific enough that an LLM can complete it without additional context.
 
-## Post-Execution Checks
+## Workflow Handoff Update
 
-_(run in order, after the main Outline completes)_
+After successful completion, run:
 
-1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./post_agent.ts --artifact-id tasks --summary "..." --handoff "..."`
+```
+npm --prefix .spec/scripts run run -- ./post_agent.ts \
+  --artifact-id tasks \
+  --summary "<one sentence describing the tasks produced>" \
+  --output-path "<feature_dir>/tasks.md" \
+  --handoff-agent spec.analyze \
+  --handoff "Perform a cross-artifact consistency and coverage analysis across spec.md, plan.md, and tasks.md."
+```
 
-   Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
+The post-agent script is responsible for:
+- marking the artifact complete and incrementing revision if tasks changed
+- marking analyze, implement, release stale if tasks changed
+- calculating eligible agents and creating the next prompt record
+- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
 
 2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.
 
