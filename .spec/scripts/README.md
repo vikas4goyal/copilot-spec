@@ -16,7 +16,7 @@ Most scripts are intentionally small entrypoints that delegate shared logic to
 ## Quick start
 
 ```bash
-cd /home/vicky/IdeaProjects/copilot-spec/.spec/scripts/typescript
+cd /home/vicky/IdeaProjects/copilot-spec/.spec/scripts
 npm install
 npm run typecheck
 ```

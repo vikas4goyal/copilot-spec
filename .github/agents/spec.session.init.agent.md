@@ -58,7 +58,7 @@ Pass `name`, `description`, and the calling agent name directly to the script. I
 
 **TypeScript:**
 ```typescript
-npm --prefix .spec/scripts/typescript run run -- ./create_new_feature.ts \
+npm --prefix .spec/scripts run run -- ./create_new_feature.ts \
   --name "<slug>" \
   --description "<rephrased-desc>" \
   --agent-name "spec.<calling-agent>" \

@@ -33,7 +33,7 @@ Run the TypeScript release script:
 
 **TypeScript:**
 ```typescript
-npm --prefix .spec/scripts/typescript run run -- ./release_feature.ts
+npm --prefix .spec/scripts run run -- ./release_feature.ts
 ```
 
 Pass `--stay-on-branch` if the user asked to stay on the feature branch.

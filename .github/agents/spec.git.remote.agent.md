@@ -8,7 +8,7 @@ Run the TypeScript script from the project root:
 
 **TypeScript:**
 ```typescript
-npm --prefix .spec/scripts/typescript run run -- ./detect_remote.ts
+npm --prefix .spec/scripts run run -- ./detect_remote.ts
 ```
 
 Use `--json` to get machine-readable output:

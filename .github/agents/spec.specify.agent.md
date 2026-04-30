@@ -25,14 +25,14 @@ _(run in order, every time)_
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 3. **Start Session Step** — Run the pre-agent script:
-   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./pre_agent.ts --agent-name spec.specify --artifact-id specify`
+   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.specify --artifact-id specify`
 
    The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
    After creating the feature directory (Outline step 3 below), update the session with the resolved metadata and output path:
    ```typescript
-   npm --prefix .spec/scripts/typescript run run -- ./manage_session.ts --action update-multi --json-patch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
-   npm --prefix .spec/scripts/typescript run run -- ./manage_session.ts --action update-artifact --artifact-id specify --artifact-field outputPath --artifact-value "<dir>/spec.md"
+   npm --prefix .spec/scripts run run -- ./manage_session.ts --action update-multi --json-patch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
+   npm --prefix .spec/scripts run run -- ./manage_session.ts --action update-artifact --artifact-id specify --artifact-field outputPath --artifact-value "<dir>/spec.md"
    ```
 
 ## Outline
@@ -224,7 +224,7 @@ Given that feature description, do this:
 _(run in order, after the main Outline completes)_
 
 1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./post_agent.ts --artifact-id specify --summary "..." --handoff "..."`
+   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./post_agent.ts --artifact-id specify --summary "..." --handoff "..."`
 
    Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
 

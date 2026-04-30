@@ -10,7 +10,7 @@ Initialize a Git repository in the current project directory if one does not alr
 
 Run the TypeScript script from the project root:
 
-- **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./initialize_repo.ts`
+- **TypeScript**: `npm --prefix .spec/scripts run run -- ./initialize_repo.ts`
 
 If the TypeScript script is not found, fall back to:
 - `git init && git add . && git commit -m "Initial commit from Specify template"`

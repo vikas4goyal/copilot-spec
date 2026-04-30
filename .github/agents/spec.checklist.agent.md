@@ -38,13 +38,13 @@ _(run in order, every time)_
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 3. **Start Session Step** — Run the pre-agent script:
-   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./pre_agent.ts --agent-name spec.checklist --artifact-id checklist`
+   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.checklist --artifact-id checklist`
 
    The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Execution Steps
 
-1. **Setup**: Run `npm --prefix .spec/scripts/typescript run run -- ./check_prerequisites.ts --json` from repo root and parse JSON for FEATURE_DIR and AVAILABLE_DOCS list.
+1. **Setup**: Run `npm --prefix .spec/scripts run run -- ./check_prerequisites.ts --json` from repo root and parse JSON for FEATURE_DIR and AVAILABLE_DOCS list.
    - All file paths must be absolute.
    - For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
@@ -310,7 +310,7 @@ Sample items:
 _(run in order, after the main Execution Steps complete)_
 
 1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./post_agent.ts --artifact-id checklist --summary "..." --handoff "..."`
+   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./post_agent.ts --artifact-id checklist --summary "..." --handoff "..."`
 
    Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
 

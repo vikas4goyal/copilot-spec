@@ -25,13 +25,13 @@ _(run in order, every time)_
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 3. **Start Session Step** — Run the pre-agent script:
-   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan`
+   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan`
 
    The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
 ## Outline
 
-1. **Setup**: Run `npm --prefix .spec/scripts/typescript run run -- ./setup_plan.ts --json` from repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
+1. **Setup**: Run `npm --prefix .spec/scripts run run -- ./setup_plan.ts --json` from repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
 2. **Load context**: Read FEATURE_SPEC and `.spec/memory/constitution.md`. Load IMPL_PLAN template (already copied).
 
@@ -51,7 +51,7 @@ _(run in order, every time)_
 _(run in order, after the main Outline completes)_
 
 1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./post_agent.ts --artifact-id plan --summary "..." --handoff "..."`
+   - **TypeScript**: `npm --prefix .spec/scripts run run -- ./post_agent.ts --artifact-id plan --summary "..." --handoff "..."`
 
    Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
 
@@ -98,7 +98,7 @@ _(run in order, after the main Outline completes)_
     - Skip if project is purely internal (build scripts, one-off tools, etc.)
 
 3. **Agent context update**:
-    - Run `npm --prefix .spec/scripts/typescript run run -- ./update_agent_context.ts --agent-type copilot`
+    - Run `npm --prefix .spec/scripts run run -- ./update_agent_context.ts --agent-type copilot`
     - These scripts detect which AI agent is in use
     - Update the appropriate agent-specific context file
     - Add only new technology from current plan

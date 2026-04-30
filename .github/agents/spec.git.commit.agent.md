@@ -161,7 +161,7 @@ chore: update files
 
 After constructing the commit message (subject + body), run the TypeScript script, passing the full multi-line message as the argument:
 
-- **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./auto_commit.ts --commit-message "<commit_message>"`
+- **TypeScript**: `npm --prefix .spec/scripts run run -- ./auto_commit.ts --commit-message "<commit_message>"`
 
 For multi-line messages use a newline (`\n`) between the subject and body when constructing the string. The script passes it directly to `git commit -m`.
 

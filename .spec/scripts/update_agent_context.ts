@@ -5,7 +5,7 @@
  * with technology stack information extracted from the active feature's plan.md.
  *
  * Usage:
- *   npx tsx .spec/scripts/typescript/update_agent_context.ts [--agent-type <type>]
+ *   npx tsx .spec/scripts/update_agent_context.ts [--agent-type <type>]
  *
  * Supported agent types:
  *   claude, gemini, copilot, cursor-agent, qwen, opencode, codex, windsurf,

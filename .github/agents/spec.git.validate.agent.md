@@ -8,7 +8,7 @@ Run the TypeScript script from the project root:
 
 **TypeScript:**
 ```typescript
-npm --prefix .spec/scripts/typescript run run -- ./validate_branch.ts
+npm --prefix .spec/scripts run run -- ./validate_branch.ts
 ```
 
 The script checks whether the current branch name matches a sequential (`001-feature-name`) or timestamp (`20260319-143022-feature-name`) pattern. It also checks whether the corresponding `specs/<prefix>-*` directory exists.

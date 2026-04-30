@@ -1,3 +1,3 @@
 /.claude/worktrees/sharp-swanson-4d73b1/
-.spec/scripts/typescript/node_modules
-.spec/scripts/typescript/package-lock.json
+.spec/scripts/node_modules
+.spec/scripts/package-lock.json

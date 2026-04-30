@@ -123,7 +123,7 @@ Normal agents should use the wrappers instead of assembling low-level steps manu
 
 **TypeScript:**
 ```typescript
-npm --prefix .spec/scripts/typescript run run -- ./bootstrap_session.ts --agent-name "spec.<agent-name>" --artifact-id "<my-artifact-id>"
+npm --prefix .spec/scripts run run -- ./bootstrap_session.ts --agent-name "spec.<agent-name>" --artifact-id "<my-artifact-id>"
 ```
 
 If `check-deps` reports missing dependencies, **stop and tell the user** what to run first.
@@ -138,7 +138,7 @@ These remain explicit because `session.json` stores state but does not infer int
 
 Run from the repo root:
 
-**TypeScript:** `npm --prefix .spec/scripts/typescript run run -- ./manage_session.ts --action <action> [params]`
+**TypeScript:** `npm --prefix .spec/scripts run run -- ./manage_session.ts --action <action> [params]`
 
 > `manage_session.ts` is a TypeScript + Node.js implementation. It does not require `jq` or any external shell dependencies.
 
