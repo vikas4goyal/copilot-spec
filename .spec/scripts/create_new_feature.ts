@@ -35,16 +35,18 @@ function today(): string {
 }
 
 function getUniqueBranchName(base: string, repoRoot: string, hasGit: boolean): string {
+  // Always prefix branch with today's date: YYYYMMDD-<slug>
+  const dateBase = `${today()}-${base}`;
   const takenBranchNames = new Set<string>();
   if (hasGit) {
-    const localBranches = gitRun(["branch", "--list", `${base}*`], repoRoot, true);
+    const localBranches = gitRun(["branch", "--list", `${dateBase}*`], repoRoot, true);
     if (localBranches.code === 0) {
       for (const line of localBranches.out.split("\n").filter(Boolean)) {
         takenBranchNames.add(line.trim().replace(/^\*/, "").trim());
       }
     }
 
-    const remoteBranches = gitRun(["branch", "-r", "--list", `*/${base}*`], repoRoot, true);
+    const remoteBranches = gitRun(["branch", "-r", "--list", `*/${dateBase}*`], repoRoot, true);
     if (remoteBranches.code === 0) {
       for (const line of remoteBranches.out.split("\n").filter(Boolean)) {
         const clean = line.trim();
@@ -53,14 +55,12 @@ function getUniqueBranchName(base: string, repoRoot: string, hasGit: boolean): s
     }
   }
 
-  // Keep original name if available; otherwise append date/counter suffixes.
-  if (!takenBranchNames.has(base)) return base;
-  const dateSuffixed = `${base}-${today()}`;
-  if (!takenBranchNames.has(dateSuffixed)) return dateSuffixed;
+  // Use date-prefixed name; append counter suffix only on collision.
+  if (!takenBranchNames.has(dateBase)) return dateBase;
 
   let counter = 2;
   while (true) {
-    const candidate = `${base}-${today()}-${counter}`;
+    const candidate = `${dateBase}-${counter}`;
     if (!takenBranchNames.has(candidate)) return candidate;
     counter += 1;
   }
@@ -68,22 +68,32 @@ function getUniqueBranchName(base: string, repoRoot: string, hasGit: boolean): s
 
 function getUniqueFolderName(base: string, specsDir: string): string {
   const prefix = `${today()}-${base}`;
-  const takenFolderNames = new Set<string>();
 
   if (fs.existsSync(specsDir) && fs.statSync(specsDir).isDirectory()) {
+    // Reuse an existing date-prefixed folder if it is empty (no files inside).
+    const existing = path.join(specsDir, prefix);
+    if (fs.existsSync(existing) && fs.statSync(existing).isDirectory()) {
+      const hasFiles = fs.readdirSync(existing).length > 0;
+      if (!hasFiles) return prefix; // reuse the empty folder
+    }
+
+    // Find the highest already-taken numbered variant to avoid collisions.
+    const takenFolderNames = new Set<string>();
     for (const name of fs.readdirSync(specsDir)) {
       const full = path.join(specsDir, name);
       if (fs.statSync(full).isDirectory() && name.startsWith(prefix)) takenFolderNames.add(name);
     }
+
+    if (!takenFolderNames.has(prefix)) return prefix;
+    let counter = 2;
+    while (true) {
+      const candidate = `${prefix}-${counter}`;
+      if (!takenFolderNames.has(candidate)) return candidate;
+      counter += 1;
+    }
   }
 
-  if (!takenFolderNames.has(prefix)) return prefix;
-  let counter = 2;
-  while (true) {
-    const candidate = `${prefix}-${counter}`;
-    if (!takenFolderNames.has(candidate)) return candidate;
-    counter += 1;
-  }
+  return prefix;
 }
 
 function writeResult(branch: string, featureDir: string, useJson: boolean): void {

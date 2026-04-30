@@ -34,26 +34,24 @@ if (!gitAvailable) {
 
 if (!branch) noBranch("Could not determine branch name", useJson);
 
-const sequentialRe = /^[0-9]{3,}-/;
-const timestampRe = /^[0-9]{8}-[0-9]{6}-/;
+const datePrefixRe = /^[0-9]{8}-/;
 
 let prefix = "";
-if (sequentialRe.test(branch)) {
-  prefix = (branch.match(/^[0-9]{3,}/) ?? [""])[0];
-} else if (timestampRe.test(branch)) {
-  prefix = (branch.match(/^[0-9]{8}-[0-9]{6}/) ?? [""])[0];
+if (datePrefixRe.test(branch)) {
+  prefix = (branch.match(/^[0-9]{8}/) ?? [""])[0];
 } else {
   if (useJson) {
     console.log(JSON.stringify({ valid: false, branch, reason: "not-a-feature-branch" }));
   } else {
     console.log(`[FAIL] Not on a feature branch. Current branch: ${branch}`);
-    console.log("Feature branches must be named like: 001-feature-name or 20260319-143022-feature-name");
+    console.log("Feature branches must be named like: 20260430-feature-name");
   }
   process.exit(1);
 }
 
-const repoRoot = path.resolve(__dirname, "..", "..", "..");
-const specsDir = path.join(repoRoot, "specs");
+const _gitRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf-8" });
+const repoRoot = (_gitRoot.status === 0 ? (_gitRoot.stdout ?? "").trim() : null) ?? path.resolve(__dirname, "..", "..");
+const specsDir = path.join(repoRoot, ".spec", "specs");
 let specDir = "";
 if (fs.existsSync(specsDir) && fs.statSync(specsDir).isDirectory()) {
   const match = fs.readdirSync(specsDir).find((d) => {

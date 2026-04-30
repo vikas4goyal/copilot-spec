@@ -70,26 +70,18 @@ export function getCurrentBranch(repoRoot?: string): string {
     if (result.status === 0) return (result.stdout ?? "").trim();
   }
 
-  const specsDir = path.join(root, "specs");
+  const specsDir = path.join(root, ".spec", "specs");
   if (fs.existsSync(specsDir) && fs.statSync(specsDir).isDirectory()) {
     let latestFeatureDirName = "";
-    let highestSequentialPrefix = 0;
-    let latestTimestampPrefix = "";
+    let latestDatePrefix = "";
 
     for (const entryName of fs.readdirSync(specsDir)) {
       const entryPath = path.join(specsDir, entryName);
       if (!fs.statSync(entryPath).isDirectory()) continue;
-      const timestampMatch = entryName.match(/^(\d{8}-\d{6})-/);
-      const sequentialMatch = entryName.match(/^(\d{3,})-/);
-      if (timestampMatch) {
-        if (timestampMatch[1] > latestTimestampPrefix) {
-          latestTimestampPrefix = timestampMatch[1];
-          latestFeatureDirName = entryName;
-        }
-      } else if (sequentialMatch && !latestTimestampPrefix) {
-        const sequentialNumber = Number.parseInt(sequentialMatch[1], 10);
-        if (sequentialNumber > highestSequentialPrefix) {
-          highestSequentialPrefix = sequentialNumber;
+      const dateMatch = entryName.match(/^(\d{8})-/);
+      if (dateMatch) {
+        if (dateMatch[1] > latestDatePrefix) {
+          latestDatePrefix = dateMatch[1];
           latestFeatureDirName = entryName;
         }
       }
@@ -107,14 +99,12 @@ export function testFeatureBranch(branch: string, hasGit = true): boolean {
     return true;
   }
 
-  const malformed = /^[0-9]{7}-[0-9]{6}-/.test(branch) || /^(?:\d{7}|\d{8})-\d{6}$/.test(branch);
-  const isSequential = /^[0-9]{3,}-/.test(branch) && !malformed;
-  const isTimestamp = /^\d{8}-\d{6}-/.test(branch);
+  const isDatePrefixed = /^[0-9]{8}-/.test(branch);
 
-  if (!isSequential && !isTimestamp) {
+  if (!isDatePrefixed) {
     console.log(`ERROR: Not on a feature branch. Current branch: ${branch}`);
     console.log(
-      "Feature branches should be named like: 001-feature-name, 1234-feature-name, or 20260319-143022-feature-name",
+      "Feature branches should be named like: 20260430-feature-name",
     );
     return false;
   }

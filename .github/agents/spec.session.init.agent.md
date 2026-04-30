@@ -27,10 +27,10 @@ You **MUST** consider the user input before proceeding (if not empty).
 > |---|---|---|
 > | `name` | This agent (passed to script) | `oauth2-login` |
 > | `description` | This agent (passed to script) | `"Implements OAuth2 login…"` |
-> | `branch_name` | `create-new-feature` | `oauth2-login` or `oauth2-login-20260423` |
-> | `feature_dir` | `create-new-feature` | `.spec/specs/20260423-oauth2-login` |
+> | `branch_name` | `create-new-feature` | `20260430-oauth2-login` |
+> | `feature_dir` | `create-new-feature` | `.spec/specs/20260430-oauth2-login` |
 >
-> `branch_name` and `feature_dir` intentionally differ: branches are clean slugs (date only on conflict), folders are always date-prefixed so `.spec/specs/` lists chronologically.
+> Both `branch_name` and `feature_dir` are always date-prefixed (`YYYYMMDD-<slug>`), keeping `.spec/specs/` listings chronological and branches easy to identify.
 
 This agent is idempotent:
 - If a session already exists **and** the current git branch matches `branch_name` **and** the feature folder exists → the script skips all creation steps and outputs the existing values.
@@ -83,7 +83,7 @@ After `create-new-feature` runs, `session.json` is created with the v3.0 schema 
   "id": "20260423-143022-AbCd",
   "name": "oauth2-login",
   "description": "Implements OAuth2 login flow allowing users to authenticate with their Google account.",
-  "branch_name": "oauth2-login",
+  "branch_name": "20260423-oauth2-login",
   "feature_dir": ".spec/specs/20260423-oauth2-login",
   "status": "active",
   "pipeline": {
@@ -98,23 +98,23 @@ After `create-new-feature` runs, `session.json` is created with the v3.0 schema 
 
 Console output:
 [session.init] Session created: .spec/session.json (id: 20260423-143022-AbCd)
-[session.init] Branch 'oauth2-login' created and checked out
+[session.init] Branch '20260423-oauth2-login' created and checked out
 [session.init] Spec file created from template: .spec/specs/20260423-oauth2-login/spec.md
-[session.init] Session updated: branch_name=oauth2-login  feature_dir=.spec/specs/20260423-oauth2-login
+[session.init] Session updated: branch_name=20260423-oauth2-login  feature_dir=.spec/specs/20260423-oauth2-login
 ```
 
 ### Resume / idempotent output
 
 ```text
 [session.init] Session name: 'oauth2-login'
-[session.init] Current git branch: 'oauth2-login'
-[session.init] Already on branch 'oauth2-login' with feature dir '.spec/specs/20260423-oauth2-login' — nothing to do
+[session.init] Current git branch: '20260423-oauth2-login'
+[session.init] Already on branch '20260423-oauth2-login' with feature dir '.spec/specs/20260423-oauth2-login' — nothing to do
 ```
 
 ### Branch mismatch error
 
 ```text
-[session.init] ERROR: Session expects branch 'oauth2-login' but the current git branch is 'main'.
-[session.init]        Switch to the correct branch  →  git checkout oauth2-login
+[session.init] ERROR: Session expects branch '20260423-oauth2-login' but the current git branch is 'main'.
+[session.init]        Switch to the correct branch  →  git checkout 20260423-oauth2-login
 [session.init]        Or release the current feature first  →  /spec.release
 ```

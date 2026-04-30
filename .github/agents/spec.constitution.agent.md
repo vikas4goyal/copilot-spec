@@ -17,7 +17,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
 
 1. **Initialize Git Repository** — Execute the `spec.git.initialize` sub-agent and wait for it to finish.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for it to finish.
+2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for it to finish. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
 3. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 
 ## Workflow State Guard

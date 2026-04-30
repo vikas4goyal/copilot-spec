@@ -36,7 +36,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 _(run in order, every time)_
 
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion.
+2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
 3. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 
 ## Workflow State Guard

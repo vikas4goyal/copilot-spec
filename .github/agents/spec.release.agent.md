@@ -13,7 +13,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 ## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
 
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion.
+2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
 
 ## Workflow State Guard
 
