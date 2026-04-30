@@ -174,7 +174,7 @@ const nextPrompt = session.pipeline.next?.prompt;
   "name": "modern-register-ui",
   "description": "Redesign the registration UI with OAuth2 and mobile-first layout",
   "branch_name": "modern-register-ui",
-  "feature_dir": "specs/20260423-modern-register-ui",
+  "feature_dir": ".spec/specs/20260423-modern-register-ui",
   "status": "active",
   "pipeline": {
     "running": ["specify", "constitution"],

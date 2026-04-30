@@ -133,7 +133,7 @@ export function getFeaturePathsEnv(): FeaturePaths {
   let featureDir: string | null = null;
   const featureJsonPath = path.join(repoRoot, ".specs", "feature.json");
 
-  // Resolve feature dir in order: env -> .specs/feature.json -> specs/<branch>
+  // Resolve feature dir in order: env -> .spec/specs/feature.json -> .spec/specs/<branch>
   const envFeatureDir = (process.env.SPECIFY_FEATURE_DIRECTORY ?? "").trim();
   if (envFeatureDir) {
     featureDir = path.isAbsolute(envFeatureDir) ? envFeatureDir : path.join(repoRoot, envFeatureDir);

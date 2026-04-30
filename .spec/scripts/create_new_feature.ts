@@ -216,7 +216,7 @@ if (!dryRun) {
     log(`Spec file already exists: ${specFile}`);
   }
 
-  const patch = JSON.stringify({ branch_name: branchName, feature_dir: `specs/${folderName}` });
+  const patch = JSON.stringify({ branch_name: branchName, feature_dir: `.spec/specs/${folderName}` });
   const upd = runManage(["--action", "update-multi", "--json-patch", patch]);
   if (upd.code !== 0) process.exit(upd.code);
 
@@ -225,10 +225,10 @@ if (!dryRun) {
     if (add.code !== 0) process.exit(add.code);
   }
 
-  log(`Session updated: branch_name=${branchName}  feature_dir=specs/${folderName}`);
+  log(`Session updated: branch_name=${branchName}  feature_dir=.spec/specs/${folderName}`);
 } else {
   log(`[dry-run] branch_name  -> ${branchName}`);
-  log(`[dry-run] feature_dir  -> specs/${folderName}`);
+  log(`[dry-run] feature_dir  -> .spec/specs/${folderName}`);
   log("[dry-run] Would create session.json (if needed), branch and spec dir");
 }
 

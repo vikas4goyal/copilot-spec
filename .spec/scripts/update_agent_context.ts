@@ -116,7 +116,7 @@ function validateEnvironment(): void {
   }
   if (!fs.existsSync(TEMPLATE_FILE)) {
     err(`Template file not found at ${TEMPLATE_FILE}`);
-    info("Run specify init to scaffold .specs/templates, or add agent-file-template.md there.");
+    info("Run specify init to scaffold .spec/specs/templates, or add agent-file-template.md there.");
     process.exit(1);
   }
 }

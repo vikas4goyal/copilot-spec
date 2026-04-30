@@ -11,7 +11,7 @@ Run the TypeScript script from the project root:
 npm --prefix .spec/scripts run run -- ./validate_branch.ts
 ```
 
-The script checks whether the current branch name matches a sequential (`001-feature-name`) or timestamp (`20260319-143022-feature-name`) pattern. It also checks whether the corresponding `specs/<prefix>-*` directory exists.
+The script checks whether the current branch name matches a sequential (`001-feature-name`) or timestamp (`20260319-143022-feature-name`) pattern. It also checks whether the corresponding `.spec/specs/<prefix>-*` directory exists.
 
 Use `--json` to get machine-readable output for use in other scripts.
 
