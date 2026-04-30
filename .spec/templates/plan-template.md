@@ -17,21 +17,28 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Java 25 (Spring Boot 3.x required per constitution)  
+**Primary Dependencies**: Spring Boot 3.x, Spring Security (OAuth2/JWT), Spring Data JPA, Liquibase/Flyway  
+**Storage**: PostgreSQL 15+ (primary), Redis for caching (optional)  
+**Testing**: JUnit 5, Mockito, AssertJ, TestContainers; Coverage MUST be ≥80% (enforced by JaCoCo)  
+**Target Platform**: Linux server / Docker containers  
+**Project Type**: REST API web-service (Spring Boot controllers required per constitution)  
+**Performance Goals**: [e.g., p95 latency <200ms, 1000 req/s throughput - specify or NEEDS CLARIFICATION]  
+**Constraints**: [e.g., OAuth2 authentication required, SQL injection prevention, structured logging mandatory per constitution - or additional constraints if needed]  
+**Scale/Scope**: [e.g., 10k users, specify expected endpoints/data volumes - or NEEDS CLARIFICATION]
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Constitutional requirements per `.spec/memory/constitution.md`:
+- ✅ All features exposed via REST endpoints (HTTP methods, RESTful paths)
+- ✅ API contracts defined before implementation (in `contracts/` directory)
+- ✅ Unit test coverage MUST be ≥80% (measured by JaCoCo, enforced in Maven verify phase)
+- ✅ Every endpoint has authentication & authorization (`@PreAuthorize` or OAuth2)
+- ✅ Structured JSON logging with trace IDs (SLF4J + Log4j2/Logback)
+- ✅ Java 25, Spring Boot 3.x, PostgreSQL, Docker required
+- [Mark constitution check items as verified or document any justified exceptions]
 
 ## Project Structure
 
@@ -49,50 +56,47 @@
 
 ### Source Code (repository root)
 <!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
+  ACTION REQUIRED: For Spring Boot REST API projects, follow the structure in constitution.md.
+  Replace this tree with the actual feature's folder structure.
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
+# Spring Boot REST API (DEFAULT)
 src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+├── main/java/com/[org]/[project]/
+│   ├── api/
+│   │   ├── controller/          # Spring REST controllers
+│   │   ├── dto/                 # Request/response DTOs
+│   │   └── exception/           # Exception handlers
+│   ├── domain/
+│   │   ├── entity/              # JPA entities
+│   │   ├── model/               # Business domain models
+│   │   └── repository/          # Data repositories
+│   ├── service/                 # Business logic
+│   ├── config/                  # Spring configuration
+│   ├── security/                # Security config
+│   └── util/                    # Utilities
+├── main/resources/
+│   ├── application.yml
+│   ├── application-dev.yml
+│   ├── application-prod.yml
+│   ├── db/migration/            # Liquibase/Flyway SQL migrations
+│   └── contracts/               # API contract definitions (OpenAPI)
+└── test/java/com/[org]/[project]/
+    ├── api/
+    │   ├── controller/          # REST controller unit tests
+    │   └── contract/            # Contract/endpoint integration tests
+    ├── service/                 # Service unit tests
+    ├── repository/              # Repository tests
+    └── util/                    # Utility tests
 
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+pom.xml                          # Maven configuration
+Dockerfile                       # Docker image definition
+docker-compose.yml              # Local development (PostgreSQL, etc.)
+README.md                        # Quickstart & documentation
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: [Confirm this structure or document custom layout aligned with constitution requirements]
 
 ## Complexity Tracking
 

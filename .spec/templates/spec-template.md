@@ -12,10 +12,17 @@
   Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
   you should still have a viable MVP (Minimum Viable Product) that delivers value.
   
+  For REST API projects (per constitution.md):
+  - Each user story MUST expose one or more REST endpoints (@RestController in Spring)
+  - Specify HTTP method (GET/POST/PUT/DELETE/PATCH) and endpoint path (/api/v1/...)
+  - Document request/response schemas (JSON in/out) for REST endpoints
+  - Unit test coverage MUST be ≥80% (enforced by JaCoCo, tests written first - Red-Green-Refactor)
+  - Authentication & authorization MUST be specified per endpoint (@PreAuthorize)
+  
   Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
   Think of each story as a standalone slice of functionality that can be:
   - Developed independently
-  - Tested independently
+  - Tested independently (with ≥80% coverage per endpoint)
   - Deployed independently
   - Demonstrated to users independently
 -->

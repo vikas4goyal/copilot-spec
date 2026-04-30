@@ -33,11 +33,19 @@ description: "Task list template for feature implementation"
   - User stories from spec.md (with their priorities P1, P2, P3...)
   - Feature requirements from plan.md
   - Entities from data-model.md
-  - Endpoints from contracts/
+  - REST endpoints from contracts/ (HTTP method, path, request/response schema)
+  
+  Per constitution.md, MANDATORY testing requirements:
+  - Unit test coverage MUST be ≥80% (measured by JaCoCo, enforced in Maven verify)
+  - Tests MUST be written FIRST (Red-Green-Refactor cycle)
+  - Every endpoint MUST have unit tests (happy path + error paths)
+  - Every service method MUST have unit tests covering all branches
+  - Use clear naming: test_[scenario]_[expectedResult] (e.g., test_createUserWithValidEmail_returns201)
+  - Integration tests required for: new feature contracts, contract changes, multi-service flows
   
   Tasks MUST be organized by user story so each story can be:
   - Implemented independently
-  - Tested independently
+  - Tested independently (with ≥80% coverage)
   - Delivered as an MVP increment
   
   DO NOT keep these sample tasks in the generated tasks.md file.
@@ -214,7 +222,7 @@ Task: "Create [Entity2] model in src/models/[entity2].py"
 ### MVP First (User Story 1 Only)
 
 1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational (CRITICAL - blocks all stories)
+2. Complete Phase 2: Foundational
 3. Complete Phase 3: User Story 1
 4. **STOP and VALIDATE**: Test User Story 1 independently
 5. Deploy/demo if ready

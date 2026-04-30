@@ -190,8 +190,20 @@ if (handoffAgent) {
   const handoffArtifactId = handoffAgent.replace(/^spec\./, "");
   const handoffDef = COMMAND_REGISTRY[handoffArtifactId];
   const handoffCommand = handoffDef?.command ?? `/${handoffAgent}`;
+  const handoffArtifact = session.artifacts[handoffArtifactId];
 
-  if (workflowState.eligible_agents.includes(handoffCommand) || force) {
+  // Guard: do not loop back to an already-complete (non-stale) artifact.
+  // This prevents chains like constitution → specify when specify is already done
+  // (e.g. when constitution is re-run from plan/clarify to add new guidelines).
+  const isAlreadyComplete =
+    handoffArtifact?.status === "complete" || handoffArtifact?.status === "skipped";
+
+  if (isAlreadyComplete && !force) {
+    console.error(
+      `[post-agent] Note: handoff target '${handoffAgent}' is already complete. ` +
+      `Falling back to workflow recommendation to avoid a re-work loop.`,
+    );
+  } else if (workflowState.eligible_agents.includes(handoffCommand) || force) {
     nextAgentId = handoffAgent;
     nextPromptText = handoffPrompt || handoffDef?.defaultPrompt || null;
   } else {

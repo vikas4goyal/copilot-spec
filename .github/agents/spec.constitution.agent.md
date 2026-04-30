@@ -118,8 +118,16 @@ npm --prefix .spec/scripts run run -- ./post_agent.ts \
   --artifact-id constitution \
   --summary "<one sentence: e.g. 'Constitution amended to v1.2.0: added Observability principle.'>" \
   --handoff-agent spec.specify \
-  --handoff "<what the next agent needs>"
+  --handoff "<what the next agent needs to know about this constitution update>"
 ```
+
+> **Loop-prevention note:** The `--handoff-agent spec.specify` is a *suggestion*, not a forced override.
+> The `post_agent.ts` script will **automatically ignore** this handoff and fall back to the workflow
+> recommendation when `spec.specify` is already complete (e.g., when constitution is re-run from
+> plan or clarify to add new libraries or guidelines). This prevents a re-work loop:
+> `constitution → specify → …` even though specify was already finished.
+>
+> Only when `specify` has never been run (status `pending`) will this handoff take effect.
 
 The post-agent script is responsible for:
 - marking the artifact complete and incrementing revision if changed
@@ -127,6 +135,7 @@ The post-agent script is responsible for:
 - marking downstream artifacts stale if constitution changed
 - calculating eligible agents and creating the next prompt record
 - updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
+- **skipping the `--handoff-agent` if the target artifact is already complete, to prevent loops**
 
 **Post-Execution: Commit Changes**:
 - Execute the `spec.git.commit` sub-agent and wait for it to finish.
