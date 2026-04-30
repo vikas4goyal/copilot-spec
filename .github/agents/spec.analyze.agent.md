@@ -17,8 +17,7 @@ _(run in order, every time)_
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 3. **Start Session Step** — Run the pre-agent script:
-   - **PowerShell**: `.spec/scripts/powershell/pre-agent.ps1 -AgentName spec.analyze -ArtifactId analyze`
-   - **Bash**: `bash .spec/scripts/bash/pre-agent.sh --agent-name spec.analyze --artifact-id analyze`
+   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./pre_agent.ts --agent-name spec.analyze --artifact-id analyze`
 
    The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
@@ -36,7 +35,7 @@ Identify inconsistencies, duplications, ambiguities, and underspecified items ac
 
 ### 1. Initialize Analysis Context
 
-Run `.spec/scripts/powershell/check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks` once from repo root and parse JSON for FEATURE_DIR and AVAILABLE_DOCS. Derive absolute paths:
+Run `npm --prefix .spec/scripts/typescript run run -- ./check_prerequisites.ts --json --require-tasks --include-tasks` once from repo root and parse JSON for FEATURE_DIR and AVAILABLE_DOCS. Derive absolute paths:
 
 - SPEC = FEATURE_DIR/spec.md
 - PLAN = FEATURE_DIR/plan.md
@@ -179,8 +178,7 @@ Ask the user: "Would you like me to suggest concrete remediation edits for the t
 _(run in order, after the main Execution Steps complete)_
 
 1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **PowerShell**: `.spec/scripts/powershell/post-agent.ps1 -ArtifactId analyze -Summary "..." -Handoff "..."`
-   - **Bash**: `bash .spec/scripts/bash/post-agent.sh --artifact-id analyze --summary "..." --handoff "..."`
+   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./post_agent.ts --artifact-id analyze --summary "..." --handoff "..."`
 
    Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
 

@@ -29,19 +29,14 @@ Execute the `spec.git.commit` sub-agent and wait for it to finish.
 
 ### Step 2 — Push, archive, and return to base (one script call)
 
-Run the release script:
+Run the TypeScript release script:
 
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/release-feature.ps1
+**TypeScript:**
+```typescript
+npm --prefix .spec/scripts/typescript run run -- ./release_feature.ts
 ```
 
-**Bash:**
-```bash
-bash .spec/scripts/bash/release-feature.sh
-```
-
-Pass `-StayOnBranch` / `--stay-on-branch` if the user asked to stay on the feature branch.
+Pass `--stay-on-branch` if the user asked to stay on the feature branch.
 
 The script:
 - Reads `branch_name` and, if available, any recorded base-branch context from `.spec/session.json`

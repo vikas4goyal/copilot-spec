@@ -56,18 +56,9 @@ When the caller provides a feature description you **must**:
 
 Pass `name`, `description`, and the calling agent name directly to the script. It will create the session, branch, and folder in one step.
 
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/create-new-feature.ps1 `
-  -Name "<slug>" `
-  -Description "<rephrased-desc>" `
-  -AgentName "spec.<calling-agent>" `
-  -Json
-```
-
-**Bash:**
-```bash
-bash .spec/scripts/bash/create-new-feature.sh \
+**TypeScript:**
+```typescript
+npm --prefix .spec/scripts/typescript run run -- ./create_new_feature.ts \
   --name "<slug>" \
   --description "<rephrased-desc>" \
   --agent-name "spec.<calling-agent>" \

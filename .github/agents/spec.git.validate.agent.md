@@ -4,21 +4,16 @@ description: Validate current branch follows feature branch naming conventions
 
 # Validate Feature Branch
 
-Run the appropriate script from the project root:
+Run the TypeScript script from the project root:
 
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/validate-branch.ps1
-```
-
-**Bash:**
-```bash
-bash .spec/scripts/bash/validate-branch.sh
+**TypeScript:**
+```typescript
+npm --prefix .spec/scripts/typescript run run -- ./validate_branch.ts
 ```
 
 The script checks whether the current branch name matches a sequential (`001-feature-name`) or timestamp (`20260319-143022-feature-name`) pattern. It also checks whether the corresponding `specs/<prefix>-*` directory exists.
 
-Use `--json` / `-Json` to get machine-readable output for use in other scripts.
+Use `--json` to get machine-readable output for use in other scripts.
 
 ## Graceful Degradation
 

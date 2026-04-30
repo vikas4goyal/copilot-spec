@@ -159,12 +159,11 @@ chore: update files
 
 ## Execution
 
-After constructing the commit message (subject + body), run the appropriate script, passing the full multi-line message as the first argument:
+After constructing the commit message (subject + body), run the TypeScript script, passing the full multi-line message as the argument:
 
-- **Bash**: `.spec/scripts/bash/auto-commit.sh "<commit_message>"`
-- **PowerShell**: `.spec/scripts/powershell/auto-commit.ps1 -CommitMessage "<commit_message>"`
+- **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./auto_commit.ts --commit-message "<commit_message>"`
 
-For multi-line messages use a newline (`\n`) between the subject and body when constructing the string, or wrap the whole message in a here-string. The script passes it directly to `git commit -m`.
+For multi-line messages use a newline (`\n`) between the subject and body when constructing the string. The script passes it directly to `git commit -m`.
 
 ## Graceful Degradation
 

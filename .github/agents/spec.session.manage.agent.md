@@ -121,14 +121,9 @@ Normal agents should use the wrappers instead of assembling low-level steps manu
 
 ### Bootstrap
 
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/bootstrap-session.ps1 -AgentName "spec.<agent-name>" -ArtifactId "<my-artifact-id>"
-```
-
-**Bash:**
-```bash
-bash .spec/scripts/bash/bootstrap-session.sh --agent-name "spec.<agent-name>" --artifact-id "<my-artifact-id>"
+**TypeScript:**
+```typescript
+npm --prefix .spec/scripts/typescript run run -- ./bootstrap_session.ts --agent-name "spec.<agent-name>" --artifact-id "<my-artifact-id>"
 ```
 
 If `check-deps` reports missing dependencies, **stop and tell the user** what to run first.
@@ -143,13 +138,9 @@ These remain explicit because `session.json` stores state but does not infer int
 
 Run from the repo root:
 
-**PowerShell:** `.spec/scripts/powershell/manage-session.ps1 -Action <action> [params]`
+**TypeScript:** `npm --prefix .spec/scripts/typescript run run -- ./manage_session.ts --action <action> [params]`
 
-**Bash:** `bash .spec/scripts/bash/manage-session.sh --action <action> [params]`
-
-### Bash Requirement
-
-`manage-session.sh` is a Bash + `jq` implementation. It should not shell out to Python for JSON mutation. If `jq` is unavailable, the script must fail clearly instead of silently switching runtimes.
+> `manage_session.ts` is a TypeScript + Node.js implementation. It does not require `jq` or any external shell dependencies.
 
 ## Agent Lifecycle Pattern
 
@@ -166,15 +157,10 @@ If a dep check fails on `start`, **stop immediately** and tell the user which ag
 
 Read context from previously completed artifacts before starting work:
 
-```powershell
-$session     = Get-Content .spec/session.json -Raw | ConvertFrom-Json
-$specSummary = ($session.artifacts | Where-Object { $_.id -eq 'specify' }).summary
-$nextPrompt  = $session.pipeline.next.prompt
-```
-
-```bash
-spec_summary=$(jq -r '.artifacts[] | select(.id=="specify") | .summary' .spec/session.json)
-next_prompt=$(jq -r '.pipeline.next.prompt // empty' .spec/session.json)
+```typescript
+const session = JSON.parse(fs.readFileSync('.spec/session.json', 'utf-8'));
+const specSummary = session.artifacts.find((a: { id: string }) => a.id === 'specify')?.summary;
+const nextPrompt = session.pipeline.next?.prompt;
 ```
 
 ## Session JSON Schema (v3.0)

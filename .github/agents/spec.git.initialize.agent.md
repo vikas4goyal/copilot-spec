@@ -8,14 +8,12 @@ Initialize a Git repository in the current project directory if one does not alr
 
 ## Execution
 
-Run the appropriate script from the project root:
+Run the TypeScript script from the project root:
 
-- **Bash**: `.spec/scripts/bash/initialize-repo.sh`
-- **PowerShell**: `.spec/scripts/powershell/initialize-repo.ps1`
+- **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./initialize_repo.ts`
 
-If the extension scripts are not found, fall back to:
-- **Bash**: `git init && git add . && git commit -m "Initial commit from Specify template"`
-- **PowerShell**: `git init; git add .; git commit -m "Initial commit from Specify template"`
+If the TypeScript script is not found, fall back to:
+- `git init && git add . && git commit -m "Initial commit from Specify template"`
 
 The script handles all checks internally:
 - Skips if Git is not available

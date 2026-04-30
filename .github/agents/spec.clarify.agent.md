@@ -21,8 +21,7 @@ _(run in order, every time)_
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 3. **Start Session Step** — Run the pre-agent script:
-   - **PowerShell**: `.spec/scripts/powershell/pre-agent.ps1 -AgentName spec.clarify -ArtifactId clarify`
-   - **Bash**: `bash .spec/scripts/bash/pre-agent.sh --agent-name spec.clarify --artifact-id clarify`
+   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./pre_agent.ts --agent-name spec.clarify --artifact-id clarify`
 
    The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
@@ -34,7 +33,7 @@ Note: This clarification workflow is expected to run (and be completed) BEFORE i
 
 Execution steps:
 
-1. Run `.spec/scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly` from repo root **once** (combined `--json --paths-only` mode / `-Json -PathsOnly`). Parse minimal JSON payload fields:
+1. Run `npm --prefix .spec/scripts/typescript run run -- ./check_prerequisites.ts --json --paths-only` from repo root **once**. Parse minimal JSON payload fields:
    - `FEATURE_DIR`
    - `FEATURE_SPEC`
    - (Optionally capture `IMPL_PLAN`, `TASKS` for future chained flows.)
@@ -197,8 +196,7 @@ Context for prioritization: $ARGUMENTS
 _(run in order, after the main Outline completes)_
 
 1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **PowerShell**: `.spec/scripts/powershell/post-agent.ps1 -ArtifactId clarify -Summary "..." -Handoff "..."`
-   - **Bash**: `bash .spec/scripts/bash/post-agent.sh --artifact-id clarify --summary "..." --handoff "..."`
+   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./post_agent.ts --artifact-id clarify --summary "..." --handoff "..."`
 
    Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
 

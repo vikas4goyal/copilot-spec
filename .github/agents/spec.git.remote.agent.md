@@ -4,19 +4,14 @@ description: Detect Git remote URL for GitHub integration
 
 # Detect Git Remote URL
 
-Run the appropriate script from the project root:
+Run the TypeScript script from the project root:
 
-**PowerShell:**
-```powershell
-.spec/scripts/powershell/detect-remote.ps1
+**TypeScript:**
+```typescript
+npm --prefix .spec/scripts/typescript run run -- ./detect_remote.ts
 ```
 
-**Bash:**
-```bash
-bash .spec/scripts/bash/detect-remote.sh
-```
-
-Use `--json` / `-Json` to get machine-readable output:
+Use `--json` to get machine-readable output:
 ```json
 {"has_remote":true,"is_github":true,"remote_url":"https://github.com/owner/repo.git","owner":"owner","repo":"repo"}
 ```

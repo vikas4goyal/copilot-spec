@@ -25,19 +25,14 @@ _(run in order, every time)_
 1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
 2. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
 3. **Start Session Step** — Run the pre-agent script:
-   - **PowerShell**: `.spec/scripts/powershell/pre-agent.ps1 -AgentName spec.specify -ArtifactId specify`
-   - **Bash**: `bash .spec/scripts/bash/pre-agent.sh --agent-name spec.specify --artifact-id specify`
+   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./pre_agent.ts --agent-name spec.specify --artifact-id specify`
 
    The script bootstraps the session (`init` + `add-agent` + `check-deps`) and marks the artifact `in_progress`. **Stop and inform the user** if `check-deps` reports missing prerequisites.
 
    After creating the feature directory (Outline step 3 below), update the session with the resolved metadata and output path:
-   ```powershell
-   .spec/scripts/powershell/manage-session.ps1 -Action update-multi -JsonPatch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
-   .spec/scripts/powershell/manage-session.ps1 -Action update-artifact -ArtifactId specify -ArtifactField outputPath -ArtifactValue "<dir>/spec.md"
-   ```
-   ```bash
-   bash .spec/scripts/bash/manage-session.sh --action update-multi --json-patch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
-   bash .spec/scripts/bash/manage-session.sh --action update-artifact --artifact-id specify --artifact-field outputPath --artifact-value "<dir>/spec.md"
+   ```typescript
+   npm --prefix .spec/scripts/typescript run run -- ./manage_session.ts --action update-multi --json-patch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
+   npm --prefix .spec/scripts/typescript run run -- ./manage_session.ts --action update-artifact --artifact-id specify --artifact-field outputPath --artifact-value "<dir>/spec.md"
    ```
 
 ## Outline
@@ -229,8 +224,7 @@ Given that feature description, do this:
 _(run in order, after the main Outline completes)_
 
 1. **Complete Session Step** — Run the post-agent script with a concise `summary` of what was produced and a `handoff` prompt for the next agent:
-   - **PowerShell**: `.spec/scripts/powershell/post-agent.ps1 -ArtifactId specify -Summary "..." -Handoff "..."`
-   - **Bash**: `bash .spec/scripts/bash/post-agent.sh --artifact-id specify --summary "..." --handoff "..."`
+   - **TypeScript**: `npm --prefix .spec/scripts/typescript run run -- ./post_agent.ts --artifact-id specify --summary "..." --handoff "..."`
 
    Marks the artifact `complete`, cascades unblocking of downstream artifacts, and sets `pipeline.next_recommended` + `pipeline.next_prompt`.
 

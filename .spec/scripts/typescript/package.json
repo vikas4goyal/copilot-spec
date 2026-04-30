@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",
+    "prerun": "npm install --silent",
     "run": "tsx"
   },
   "devDependencies": {
