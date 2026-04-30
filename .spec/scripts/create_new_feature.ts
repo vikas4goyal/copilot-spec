@@ -109,7 +109,7 @@ const dryRun = process.argv.includes("--dry-run");
 
 const repoRoot = getRepoRoot();
 const hasGit = testHasGit(repoRoot);
-const specsDir = path.join(repoRoot, "specs");
+const specsDir = path.join(repoRoot, ".spec", "specs");
 
 if (!dryRun) fs.mkdirSync(specsDir, { recursive: true });
 
