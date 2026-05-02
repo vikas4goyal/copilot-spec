@@ -2,3 +2,4 @@
 .spec/scripts/node_modules
 .spec/scripts/package-lock.json
 .spec/scripts/dist
+OpenSpec
