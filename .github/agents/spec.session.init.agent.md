@@ -56,8 +56,7 @@ When the caller provides a feature description you **must**:
 
 Pass `name`, `description`, and the calling agent name directly to the script. It will create the session, branch, and folder in one step.
 
-**TypeScript:**
-```typescript
+```bash
 npm --prefix .spec/scripts run run -- ./create_new_feature.ts \
   --name "<slug>" \
   --description "<rephrased-desc>" \
@@ -75,46 +74,87 @@ That is the complete execution — no separate `manage-session` calls are needed
 
 ## Output
 
-After `create-new-feature` runs, `session.json` is created with the v3.0 schema and an empty pipeline:
+After `create-new-feature` runs, `session.json` is created using the **`spec-session/2.0`** schema:
 
 ```json
 {
-  "_schema": "spec-session/3.0",
-  "id": "20260423-143022-AbCd",
+  "_schema": "spec-session/2.0",
+  "id": "20260502-143022-AbCd",
   "name": "oauth2-login",
   "description": "Implements OAuth2 login flow allowing users to authenticate with their Google account.",
-  "branch_name": "20260423-oauth2-login",
-  "feature_dir": ".spec/specs/20260423-oauth2-login",
+  "branch_name": "20260502-oauth2-login",
+  "feature_dir": ".spec/specs/20260502-oauth2-login",
+  "schemaName": "spec-driven",
   "status": "active",
+  "isComplete": false,
   "pipeline": {
-    "running": [],
-    "completed": [],
-    "skipped": [],
-    "next": null
+    "current_agent": "spec.session.init",
+    "last_completed": null,
+    "eligible_agents": ["/spec.constitution", "/spec.specify"],
+    "blocked_agents": {
+      "/spec.plan": "Requires /spec.specify to be complete first",
+      "/spec.tasks": "Requires /spec.plan to be complete first"
+    },
+    "next_recommended": "/spec.specify",
+    "next_prompt_id": null,
+    "next_prompt": "Define the feature requirements and user stories.",
+    "agents_run": [{ "agent": "spec.session.init", "ran_at": "2026-05-02T14:30:22Z" }],
+    "transition_history": [],
+    "warnings": [],
+    "rework_counts": {},
+    "max_rework_per_artifact": 3
   },
-  "artifacts": []
+  "artifacts": {
+    "constitution": { "status": "optional", "required": false, "revision": 0, "outputPath": ".spec/memory/constitution.md", "based_on": {}, "summary": null, "started_at": null, "completed_at": null },
+    "specify":      { "status": "pending",  "required": true,  "revision": 0, "outputPath": null, "based_on": {}, "summary": null, "started_at": null, "completed_at": null },
+    "clarify":      { "status": "optional", "required": false, "revision": 0, "outputPath": null, "based_on": { "specify": 0 }, "summary": null, "started_at": null, "completed_at": null },
+    "plan":         { "status": "blocked",  "required": true,  "revision": 0, "outputPath": null, "based_on": { "specify": 0 }, "summary": null, "started_at": null, "completed_at": null },
+    "checklist":    { "status": "optional", "required": false, "revision": 0, "outputPath": null, "based_on": { "specify": 0, "plan": 0 }, "summary": null, "started_at": null, "completed_at": null },
+    "tasks":        { "status": "blocked",  "required": true,  "revision": 0, "outputPath": null, "based_on": { "plan": 0 }, "summary": null, "started_at": null, "completed_at": null },
+    "analyze":      { "status": "optional", "required": false, "revision": 0, "outputPath": null, "based_on": { "specify": 0, "plan": 0, "tasks": 0 }, "summary": null, "started_at": null, "completed_at": null },
+    "implement":    { "status": "blocked",  "required": true,  "revision": 0, "outputPath": null, "based_on": { "tasks": 0 }, "summary": null, "started_at": null, "completed_at": null },
+    "release":      { "status": "blocked",  "required": false, "revision": 0, "outputPath": null, "based_on": { "implement": 0 }, "summary": null, "started_at": null, "completed_at": null }
+  },
+  "prompts": {}
 }
 ```
 
-Console output:
-[session.init] Session created: .spec/session.json (id: 20260423-143022-AbCd)
-[session.init] Branch '20260423-oauth2-login' created and checked out
-[session.init] Spec file created from template: .spec/specs/20260423-oauth2-login/spec.md
-[session.init] Session updated: branch_name=20260423-oauth2-login  feature_dir=.spec/specs/20260423-oauth2-login
+### Artifact Status Reference
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Not yet started, no hard-dep blockers |
+| `optional` | Can run any time, not required for completion |
+| `blocked` | Hard dependencies not yet met |
+| `in_progress` | Currently running (set by `pre_agent.ts`) |
+| `complete` | Done; revision incremented |
+| `stale` | Done but an upstream it based_on has since changed |
+| `skipped` | Intentionally bypassed; counts as satisfied for dep checks |
+
+### Console output:
+```text
+[feature] Session name: oauth2-login
+[feature] Current git branch: none
+[feature] Branch '20260502-oauth2-login' created and checked out
+[feature] Spec file created from template: .spec/specs/20260502-oauth2-login/spec.md
+[feature] Session updated: branch_name=20260502-oauth2-login  feature_dir=.spec/specs/20260502-oauth2-login
+BRANCH_NAME: 20260502-oauth2-login
+FEATURE_DIR: .../spec/specs/20260502-oauth2-login
+SPEC_FILE:   .../spec/specs/20260502-oauth2-login/spec.md
 ```
 
 ### Resume / idempotent output
 
 ```text
-[session.init] Session name: 'oauth2-login'
-[session.init] Current git branch: '20260423-oauth2-login'
-[session.init] Already on branch '20260423-oauth2-login' with feature dir '.spec/specs/20260423-oauth2-login' — nothing to do
+[feature] Session name: oauth2-login
+[feature] Current git branch: 20260502-oauth2-login
+[feature] Already on branch '20260502-oauth2-login' with feature dir '.spec/specs/20260502-oauth2-login' — nothing to do
 ```
 
 ### Branch mismatch error
 
 ```text
-[session.init] ERROR: Session expects branch '20260423-oauth2-login' but the current git branch is 'main'.
-[session.init]        Switch to the correct branch  →  git checkout 20260423-oauth2-login
-[session.init]        Or release the current feature first  →  /spec.release
+[feature] ERROR: Session expects branch '20260502-oauth2-login' but current git branch is 'main'.
+[feature]        Switch to the correct branch  ->  git checkout 20260502-oauth2-login
+[feature]        Or release the current feature first  ->  /spec.release
 ```
