@@ -18,92 +18,33 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
-## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
+## Pre-Execution Checks
 
-_(run in order, every time)_
+1. Execute `spec.git.initialize` sub-agent and wait for completion.
+2. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
+3. Execute `spec.git.commit` sub-agent and wait for completion.
+4. Run the following command to check prerequisites.
 
-1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
-3. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
+   ```
+   npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.specify --artifact-id specify
+   ```
 
-## Workflow State Guard
-
-Before doing any work, run:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.specify --artifact-id specify
-```
-
-If the script output contains `"ok": false`:
-- Stop immediately.
-- Do not modify files.
-- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
-
-If a prompt id is supplied by the user, pass it through:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.specify --artifact-id specify --prompt-id <prompt-id>
-```
-
-
+   If the script output contains `"ok": false`:
+   - Stop immediately.
+      - Do not modify files.
+      - Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+     
 ## Outline
 
 The text the user typed after `/spec.specify` in the triggering message **is** the feature description. Assume you always have it available in this conversation even if `$ARGUMENTS` appears literally below. Do not ask the user to repeat it unless they provided an empty command.
 
 Given that feature description, do this:
 
-1. **Generate a concise short name** (2-4 words) for the feature:
-    - Analyze the feature description and extract the most meaningful keywords
-    - Create a 2-4 word short name that captures the essence of the feature
-    - Use action-noun format when possible (e.g., "add-user-auth", "fix-payment-bug")
-    - Preserve technical terms and acronyms (OAuth2, API, JWT, etc.)
-    - Keep it concise but descriptive enough to understand the feature at a glance
-    - Examples:
-        - "I want to add user authentication" → "user-auth"
-        - "Implement OAuth2 integration for the API" → "oauth2-api-integration"
-        - "Create a dashboard for analytics" → "analytics-dashboard"
-        - "Fix payment processing timeout bug" → "fix-payment-timeout"
-
-2. **Branch creation** (optional, via hook):
-
-   If a `before_specify` hook ran successfully in the Pre-Execution Checks above, it will have created/switched to a git branch and output JSON containing `BRANCH_NAME`. Note this value for reference, but the branch name does **not** dictate the spec directory name.
-
-   If the user explicitly provided `GIT_BRANCH_NAME`, pass it through to the hook so the branch script uses the exact value as the branch name (bypassing all prefix/suffix generation).
-
-3. **Create the spec feature directory**:
-
-   Specs live under the default `.spec/specs/` directory unless the user explicitly provides `SPECIFY_FEATURE_DIRECTORY`.
-
-   **Resolution order for `SPECIFY_FEATURE_DIRECTORY`**:
-    1. If the user explicitly provided `SPECIFY_FEATURE_DIRECTORY` (e.g., via environment variable, argument, or configuration), use it as-is
-    2. Otherwise, auto-generate it under `.spec/specs/`:
-        - Check `.spec/init-options.json` for `branch_numbering`
-        - If `"timestamp"`: prefix is `YYYYMMDD-HHMMSS` (current timestamp)
-        - If `"sequential"` or absent: prefix is `NNN` (next available 3-digit number after scanning existing directories in `.spec/specs/`)
-        - Construct the directory name: `<prefix>-<short-name>` (e.g., `003-user-auth` or `20260319-143022-user-auth`)
-        - Set `SPECIFY_FEATURE_DIRECTORY` to `.spec/specs/<directory-name>`
-
-   **Create the directory and spec file**:
-    - `mkdir -p SPECIFY_FEATURE_DIRECTORY`
-    - Copy `.spec/templates/spec-template.md` to `SPECIFY_FEATURE_DIRECTORY/spec.md` as the starting point
-    - Set `SPEC_FILE` to `SPECIFY_FEATURE_DIRECTORY/spec.md`
-    - Persist the resolved path to `.spec/feature.json`:
-      ```json
-      {
-        "feature_directory": "<resolved feature dir>"
-      }
-      ```
-      Write the actual resolved directory path value (for example, `.spec/specs/003-user-auth`), not the literal string `SPECIFY_FEATURE_DIRECTORY`.
-      This allows downstream commands (`/spec.plan`, `/spec.tasks`, etc.) to locate the feature directory without relying on git branch name conventions.
-
-   **IMPORTANT**:
-    - You must only create one feature per `/spec.specify` invocation
-    - The spec directory name and the git branch name are independent — they may be the same but that is the user's choice
-    - The spec directory and file are always created by this command, never by the hook
-
-4. Load `.spec/templates/spec-template.md` to understand required sections.
-
-5. Follow this execution flow:
+1. Execute `spec.session.init` sub-agent with the ```$ARGUMENTS``` and wait for completion.
+2. **Load** `.spec/templates/spec-template.md` to understand required sections.
+3. Run `npm --prefix .spec/scripts run run -- ./check_prerequisites.ts --json --require-tasks --include-tasks` and parse JSON for FEATURE_DIR. Derive absolute paths:
+    - Set 'SPECIFY_FEATURE_DIRECTORY' to FEATURE_DIR
+4. Follow this execution flow:
     1. Parse user description from arguments
        If empty: ERROR "No feature description provided"
     2. Extract key concepts from description
@@ -114,7 +55,7 @@ Given that feature description, do this:
             - The choice significantly impacts feature scope or user experience
             - Multiple reasonable interpretations exist with different implications
             - No reasonable default exists
-        - **LIMIT: Maximum 3 [NEEDS CLARIFICATION] markers total**
+        - **LIMIT: Maximum 5 [NEEDS CLARIFICATION] markers total**
         - Prioritize clarifications by impact: scope > security/privacy > user experience > technical details
     4. Fill User Scenarios & Testing section
        If no clear user flow: ERROR "Cannot determine user scenarios"
@@ -128,9 +69,9 @@ Given that feature description, do this:
     7. Identify Key Entities (if data involved)
     8. Return: SUCCESS (spec ready for planning)
 
-6. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
+5. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
 
-7. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
+6. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
 
    a. **Create Spec Quality Checklist**: Generate a checklist file at `SPECIFY_FEATURE_DIRECTORY/checklists/requirements.md` using the checklist template structure with these validation items:
 
@@ -177,7 +118,7 @@ Given that feature description, do this:
 
    c. **Handle Validation Results**:
 
-    - **If all items pass**: Mark checklist complete and proceed to step 7
+    - **If all items pass**: Mark checklist complete and proceed to step 8
 
     - **If items fail (excluding [NEEDS CLARIFICATION])**:
         1. List the failing items and specific issues
@@ -222,39 +163,30 @@ Given that feature description, do this:
 
    d. **Update Checklist**: After each validation iteration, update the checklist file with current pass/fail status
 
-8. **Report completion** to the user with:
+7. **Report completion** to the user with:
     - `SPECIFY_FEATURE_DIRECTORY` — the feature directory path
     - `SPEC_FILE` — the spec file path
     - Checklist results summary
     - Readiness for the next phase (`/spec.clarify` or `/spec.plan`)
 
-**NOTE:** Branch creation is handled by the `create-new-feature` script during session bootstrap. Spec directory and file creation are always handled by this core command.
+## Post-Execution Checks
+1. Run the following command:
+    ```
+    npm --prefix .spec/scripts run run -- ./post_agent.ts \
+      --artifact-id specify \
+      --summary "<one sentence describing the spec produced>" \
+      --output-path "<feature_dir>/spec.md" \
+      --handoff-agent spec.plan \
+      --handoff "Create a technical implementation plan from the current specification."
+    ```
 
-## Workflow Handoff Update
+    Update session metadata:
+    ```
+    npm --prefix .spec/scripts run run -- ./manage_session.ts --action update-multi --json-patch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
+    ```
 
-After successful completion, run:
+2. Execute `spec.git.commit` sub-agent and wait for completion.
 
-```
-npm --prefix .spec/scripts run run -- ./post_agent.ts \
-  --artifact-id specify \
-  --summary "<one sentence describing the spec produced>" \
-  --output-path "<feature_dir>/spec.md" \
-  --handoff-agent spec.plan \
-  --handoff "Create a technical implementation plan from the current specification."
-```
-
-The post-agent script is responsible for:
-- marking the artifact complete and incrementing revision if changed
-- marking downstream artifacts (clarify, plan, tasks, etc.) stale if spec changed
-- calculating eligible agents and creating the next prompt record
-- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
-
-Also update session metadata after creating the feature directory:
-```
-npm --prefix .spec/scripts run run -- ./manage_session.ts --action update-multi --json-patch '{"name":"<short-name>","description":"<desc>","feature_dir":"<dir>"}'
-```
-
-2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion.
 
 ## Quick Guidelines
 
@@ -275,7 +207,7 @@ When creating this spec from a user prompt:
 
 1. **Make informed guesses**: Use context, industry standards, and common patterns to fill gaps
 2. **Document assumptions**: Record reasonable defaults in the Assumptions section
-3. **Limit clarifications**: Maximum 3 [NEEDS CLARIFICATION] markers - use only for critical decisions that:
+3. **Limit clarifications**: Maximum 5 [NEEDS CLARIFICATION] markers - use only for critical decisions that:
     - Significantly impact feature scope or user experience
     - Have multiple reasonable interpretations with different implications
     - Lack any reasonable default

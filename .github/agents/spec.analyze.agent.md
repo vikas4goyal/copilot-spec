@@ -10,33 +10,19 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
-## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
+## Pre-Execution Checks
 
-_(run in order, every time)_
-
-1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
-3. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
-
-## Workflow State Guard
-
-Before doing any work, run:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.analyze --artifact-id analyze
-```
-
-If the script output contains `"ok": false`:
-- Stop immediately.
-- Do not modify files.
-- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
-
-If a prompt id is supplied by the user, pass it through:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.analyze --artifact-id analyze --prompt-id <prompt-id>
-```
-
+1. Execute `spec.git.initialize` sub-agent and wait for completion.
+2. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
+3. Execute `spec.git.commit` sub-agent and wait for completion.
+4. Run the following command to check prerequisites.
+   ```
+   npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.analyze --artifact-id analyze
+   ```
+   If the script output contains `"ok": false`:
+   - Stop immediately.
+     - Do not modify files.
+     - Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
 
 ## Goal
 
@@ -46,7 +32,27 @@ Identify inconsistencies, duplications, ambiguities, and underspecified items ac
 
 **STRICTLY READ-ONLY**: Do **not** modify any files. Output a structured analysis report. Offer an optional remediation plan (user must explicitly approve before any follow-up editing commands would be invoked manually).
 
-**Constitution Authority**: The project constitution (`.spec/memory/constitution.md`) is **non-negotiable** within this analysis scope. Constitution conflicts are automatically CRITICAL and require adjustment of the spec, plan, or tasks—not dilution, reinterpretation, or silent ignoring of the principle. If a principle itself needs to change, that must occur in a separate, explicit constitution update outside `/spec.analyze`.
+**Constitution Authority**: The project constitution (`.specify/memory/constitution.md`) is **non-negotiable** within this analysis scope. Constitution conflicts are automatically CRITICAL and require adjustment of the spec, plan, or tasks—not dilution, reinterpretation, or silent ignoring of the principle. If a principle itself needs to change, that must occur in a separate, explicit constitution update outside `/spec.analyze`.
+
+## Execution Steps
+
+### 1. Setup
+
+Run `npm --prefix .spec/scripts run run -- ./check_prerequisites.ts --json --require-tasks --include-tasks` and parse JSON for FEATURE_DIR. Derive absolute paths:
+
+- SPEC = FEATURE_DIR/spec.md
+- PLAN = FEATURE_DIR/plan.md
+- TASKS = FEATURE_DIR/tasks.md
+
+Abort with an error message if any required file is missing (instruct the user to run missing prerequisite command).
+For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
+
+
+## Operating Constraints
+
+**STRICTLY READ-ONLY**: Do **not** modify any files. Output a structured analysis report. Offer an optional remediation plan (user must explicitly approve before any follow-up editing commands would be invoked manually).
+
+**Constitution Authority**: The project constitution (`.specify/memory/constitution.md`) is **non-negotiable** within this analysis scope. Constitution conflicts are automatically CRITICAL and require adjustment of the spec, plan, or tasks—not dilution, reinterpretation, or silent ignoring of the principle. If a principle itself needs to change, that must occur in a separate, explicit constitution update outside `/spec.analyze`.
 
 ## Execution Steps
 
@@ -101,9 +107,6 @@ Create internal representations (do not include raw artifacts in output):
 - **Task coverage mapping**: Map each task to one or more requirements or stories (inference by keyword / explicit reference patterns like IDs or key phrases)
 - **Constitution rule set**: Extract principle names and MUST/SHOULD normative statements
 
-### 4. Detection Passes (Token-Efficient Analysis)
-
-Focus on high-signal findings. Limit to 50 findings total; aggregate remainder in overflow summary.
 
 #### A. Duplication Detection
 
@@ -190,24 +193,17 @@ At end of report, output a concise Next Actions block:
 
 Ask the user: "Would you like me to suggest concrete remediation edits for the top N issues?" (Do NOT apply them automatically.)
 
-## Workflow Handoff Update
+## Post-Execution Checks
 
-After successful completion, run:
-
-```
-npm --prefix .spec/scripts run run -- ./post_agent.ts \
-  --artifact-id analyze \
-  --summary "<one sentence: e.g. 'Analysis found 2 critical issues and 3 coverage gaps.'>" \
-  --handoff-agent spec.implement \
-  --handoff "Execute the implementation plan by processing and executing all tasks defined in tasks.md."
-```
-
-The post-agent script is responsible for:
-- marking the artifact complete (analyze is read-only; does not stale downstream unless remediation was accepted)
-- calculating eligible agents and creating the next prompt record
-- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
-
-2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.
+1. Run the following command:
+    ```
+    npm --prefix .spec/scripts run run -- ./post_agent.ts \
+      --artifact-id analyze \
+      --summary "<one sentence summary>" \
+      --handoff-agent spec.implement \
+      --handoff "Execute the implementation plan by processing and executing all tasks defined in tasks.md."
+    ```
+2. Execute `spec.git.commit` sub-agent and wait for completion.
 
 ## Operating Principles
 

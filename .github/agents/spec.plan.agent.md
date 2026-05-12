@@ -18,33 +18,20 @@ $ARGUMENTS
 
 You **MUST** consider the user input before proceeding (if not empty).
 
-## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
+## Pre-Execution Checks
 
-_(run in order, every time)_
+1. Execute `spec.git.initialize` sub-agent and wait for completion.
+2. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
+3. Execute `spec.git.commit` sub-agent and wait for completion.
+4. Run the following command to check prerequisites.
+   ```
+   npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan
+   ```
 
-1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
-3. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
-
-## Workflow State Guard
-
-Before doing any work, run:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan
-```
-
-If the script output contains `"ok": false`:
-- Stop immediately.
-- Do not modify files.
-- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
-
-If a prompt id is supplied by the user, pass it through:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --artifact-id plan --prompt-id <prompt-id>
-```
-
+   If the script output contains `"ok": false`:
+   - Stop immediately.
+      - Do not modify files.
+      - Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
 
 ## Outline
 
@@ -52,99 +39,48 @@ npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.plan --ar
 
 2. **Load context**: Read FEATURE_SPEC and `.spec/memory/constitution.md`. Load IMPL_PLAN template (already copied).
 
+3. **Execute plan workflow** following IMPL_PLAN template structure:
+   - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
+   - Fill Constitution Check from constitution; ERROR on violations
+   - Phase 0: Generate `research.md` (resolve all NEEDS CLARIFICATION)
+   - Phase 1: Generate `data-model.md`, `contracts/`, `quickstart.md`; update agent context
+   - Re-evaluate Constitution Check post-design
+
+4. **Report**: Branch, IMPL_PLAN path, generated artifacts. Command ends after Phase 1.
+
+## Phase 0: Outline & Research
+
+1. For each NEEDS CLARIFICATION → research task; for each dependency → best practices task; for each integration → patterns task.
+
+2. **Load context**: Read FEATURE_SPEC and `.spec/memory/constitution.md`. Load IMPL_PLAN template (already copied).
+
 3. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:
-    - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
-    - Fill Constitution Check section from constitution
-    - Evaluate gates (ERROR if violations unjustified)
-    - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
-    - Phase 1: Generate data-model.md, contracts/, quickstart.md
-    - Phase 1: Update agent context by running the agent script
-    - Re-evaluate Constitution Check post-design
+   - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
+   - Fill Constitution Check section from constitution
+   - Evaluate gates (ERROR if violations unjustified)
+   - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
+   - Phase 1: Generate data-model.md, contracts/, quickstart.md
+   - Phase 1: Update agent context by running the agent script
+   - Re-evaluate Constitution Check post-design
 
 4. **Stop and report**: Command ends after Phase 2 planning. Report branch, IMPL_PLAN path, and generated artifacts.
 
-## Workflow Handoff Update
+## Post-Execution Checks
 
-After successful completion, run:
+1. Run the following command:
 
-```
-npm --prefix .spec/scripts run run -- ./post_agent.ts \
-  --artifact-id plan \
-  --summary "<one sentence describing the plan produced>" \
-  --output-path "<feature_dir>/plan.md" \
-  --handoff-agent spec.tasks \
-  --handoff "Generate dependency-ordered implementation tasks from the current plan."
-```
-
-If new governance-sensitive technology was discovered during planning and a constitution update is needed, pass a workflow request:
-
-```
-npm --prefix .spec/scripts run run -- ./post_agent.ts \
-  --artifact-id plan \
-  --summary "..." \
-  --handoff-agent spec.tasks \
-  --handoff "..." \
-  --workflow-request-json '{"recommend":"/spec.constitution","reason":"New library choice requires governance update"}'
-```
-
-The post-agent script is responsible for:
-- marking the artifact complete and incrementing revision if plan changed
-- marking tasks, analyze, implement, release stale if plan changed
-- calculating eligible agents and creating the next prompt record
-- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
-
-2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.
-
-## Phases
-
-### Phase 0: Outline & Research
-
-1. **Extract unknowns from Technical Context** above:
-    - For each NEEDS CLARIFICATION → research task
-    - For each dependency → best practices task
-    - For each integration → patterns task
-
-2. **Generate and dispatch research agents**:
-
-   ```text
-   For each unknown in Technical Context:
-     Task: "Research {unknown} for {feature context}"
-   For each technology choice:
-     Task: "Find best practices for {tech} in {domain}"
+   ```
+   npm --prefix .spec/scripts run run -- ./post_agent.ts \
+     --artifact-id plan \
+     --summary "<one sentence describing the plan produced>" \
+     --output-path "<feature_dir>/plan.md" \
+     --handoff-agent spec.tasks \
+     --handoff "Generate dependency-ordered implementation tasks from the current plan."
    ```
 
-3. **Consolidate findings** in `research.md` using format:
-    - Decision: [what was chosen]
-    - Rationale: [why chosen]
-    - Alternatives considered: [what else evaluated]
+   If new governance-sensitive technology requires a constitution update, add:
+      ```
+        --workflow-request-json '{"recommend":"/spec.constitution","reason":"New library choice requires governance update"}'
+      ```
 
-**Output**: research.md with all NEEDS CLARIFICATION resolved
-
-### Phase 1: Design & Contracts
-
-**Prerequisites:** `research.md` complete
-
-1. **Extract entities from feature spec** → `data-model.md`:
-    - Entity name, fields, relationships
-    - Validation rules from requirements
-    - State transitions if applicable
-
-2. **Define interface contracts** (if project has external interfaces) → `/contracts/`:
-    - Identify what interfaces the project exposes to users or other systems
-    - Document the contract format appropriate for the project type
-    - Examples: public APIs for libraries, command schemas for CLI tools, endpoints for web services, grammars for parsers, UI contracts for applications
-    - Skip if project is purely internal (build scripts, one-off tools, etc.)
-
-3. **Agent context update**:
-    - Run `npm --prefix .spec/scripts run run -- ./update_agent_context.ts --agent-type copilot`
-    - These scripts detect which AI agent is in use
-    - Update the appropriate agent-specific context file
-    - Add only new technology from current plan
-    - Preserve manual additions between markers
-
-**Output**: data-model.md, /contracts/*, quickstart.md, agent-specific file
-
-## Key rules
-
-- Use absolute paths
-- ERROR on gate failures or unresolved clarifications
+2. Execute `spec.git.commit` sub-agent and wait for completion.

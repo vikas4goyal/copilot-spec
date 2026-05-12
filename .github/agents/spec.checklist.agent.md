@@ -28,43 +28,26 @@ description: Generate a custom checklist for the current feature based on user r
 ```text
 $ARGUMENTS
 ```
-
 You **MUST** consider the user input before proceeding (if not empty).
 
-## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
+## Pre-Execution Checks
 
-_(run in order, every time)_
-
-1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion. Idempotent; safe when the repo already exists.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
-3. **Commit Pending Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Captures any pre-existing uncommitted work before this agent modifies anything.
-
-## Workflow State Guard
-
-Before doing any work, run:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.checklist --artifact-id checklist
-```
-
-If the script output contains `"ok": false`:
-- Stop immediately.
-- Do not modify files.
-- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
-
-If a prompt id is supplied by the user, pass it through:
-
-```
-npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.checklist --artifact-id checklist --prompt-id <prompt-id>
-```
-
+1. Execute `spec.git.initialize` sub-agent and wait for completion.
+2. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
+3. Execute `spec.git.commit` sub-agent and wait for completion.
+4. Run the following command to check prerequisites.
+   ```
+   npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.checklist --artifact-id checklist
+   ```
+   If the script output contains `"ok": false`:
+   - Stop immediately.
+      - Do not modify files.
+      - Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
 
 ## Execution Steps
-
 1. **Setup**: Run `npm --prefix .spec/scripts run run -- ./check_prerequisites.ts --json` from repo root and parse JSON for FEATURE_DIR and AVAILABLE_DOCS list.
    - All file paths must be absolute.
    - For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
-
 2. **Clarify intent (dynamic)**: Derive up to THREE initial contextual clarifying questions (no pre-baked catalog). They MUST:
    - Be generated from the user's phrasing + extracted signals from spec/plan/tasks
    - Only ask about information that materially changes checklist content
@@ -322,21 +305,13 @@ Sample items:
 - Wrong: "Does it do X?"
 - Correct: "Is X clearly specified?"
 
-## Workflow Handoff Update
-
-After successful completion, run:
-
-```
-npm --prefix .spec/scripts run run -- ./post_agent.ts \
-  --artifact-id checklist \
-  --summary "<one sentence describing the checklist produced>" \
-  --handoff-agent spec.plan \
-  --handoff "Create a technical implementation plan from the current specification."
-```
-
-The post-agent script is responsible for:
-- marking the artifact complete and incrementing revision
-- calculating eligible agents and creating the next prompt record
-- updating `pipeline.next_recommended`, `pipeline.next_prompt_id`, and `pipeline.next_prompt`
-
-2. **Commit Changes** — Execute the `spec.git.commit` sub-agent and wait for completion. Commits this agent's outputs and the session updates together.
+## Post-Execution Checks
+1. Run the following command:
+   ```
+   npm --prefix .spec/scripts run run -- ./post_agent.ts \
+     --artifact-id checklist \
+     --summary "<one sentence describing the checklist produced>" \
+     --handoff-agent spec.plan \
+     --handoff "Create a technical implementation plan from the current specification."
+   ```
+2. Execute `spec.git.commit` sub-agent and wait for completion.

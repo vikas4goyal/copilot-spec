@@ -2,34 +2,17 @@
 description: Initialize a Git repository with an initial commit
 ---
 
-# Initialize Git Repository
-
-Initialize a Git repository in the current project directory if one does not already exist.
-
 ## Execution
 
 Run the TypeScript script from the project root:
 
-- **TypeScript**: `npm --prefix .spec/scripts run run -- ./initialize_repo.ts`
+```
+npm --prefix .spec/scripts run run -- ./initialize_repo.ts
+```
 
-If the TypeScript script is not found, fall back to:
-- `git init && git add . && git commit -m "Initial commit from Specify template"`
+Fallback if script missing: `git init && git add . && git commit -m "Initial commit from Specify template"`
 
-The script handles all checks internally:
-- Skips if Git is not available
-- Skips if already inside a Git repository
-- Runs `git init`, `git add .`, and `git commit` with an initial commit message
-- Skip files that are likely auto-generated or noise: `*.lock`, `package-lock.json`, `yarn.lock`, `*.min.js`, `*.min.css`, `dist/`, `build/`, `node_modules/`, `target/`, `.gradle/`, `out/`, `*.class`, `*.jar`, `*.war`, `*.ear`, `.settings/`, `.classpath`, `.project`
-
-## Customization
-
-Replace the script to add project-specific Git initialization steps:
-- Custom `.gitignore` templates
-- Default branch naming (`git config init.defaultBranch`)
-- Git LFS setup
-- Git hooks installation
-- Commit signing configuration
-- Git Flow initialization
+Idempotent — skips if Git is unavailable or repo already exists. Ignores: `*.lock`, `package-lock.json`, `yarn.lock`, `*.min.js`, `*.min.css`, `dist/`, `build/`, `node_modules/`, `target/`, `.gradle/`, `out/`, `*.class`, `*.jar`, `*.war`, `*.ear`, `.settings/`, `.classpath`, `.project`
 
 ## Output
 

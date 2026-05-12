@@ -8,88 +8,50 @@ description: Finalize and release the current feature flow — push the branch t
 $ARGUMENTS
 ```
 
-You **MUST** consider the user input before proceeding (if not empty).
+## Pre-Execution: Git Setup _(runs FIRST)_
 
-## Pre-Execution: Git Setup _(runs FIRST, before anything else)_
-
-1. **Initialize Git** — Execute the `spec.git.initialize` sub-agent and wait for completion.
-2. **Validate Feature Branch** — Execute the `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
+1. Execute `spec.git.initialize` sub-agent → wait.
+2. Execute `spec.git.validate` sub-agent → wait. **Stop if exit code 1.**
 
 ## Workflow State Guard
-
-Before doing any work, run:
 
 ```
 npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.release --artifact-id release
 ```
 
-If the script output contains `"ok": false`:
-- Stop immediately.
-- Do not modify files.
-- Print the `reason`, `next_recommended`, `next_prompt_id`, and `next_prompt` from the script output.
+Stop if `"ok": false` — print `reason`, `next_recommended`, `next_prompt_id`, `next_prompt`.
 
-To override blocking checks (e.g. releasing before implement is fully complete):
-
+To override blocking checks (e.g., releasing before implement completes):
 ```
 npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.release --artifact-id release --force
 ```
 
-## Purpose
-
-`spec.release` is the **final step** in any spec workflow. It:
-
-1. Commits any uncommitted changes to the feature branch.
-2. Pushes the feature branch to remote `origin`.
-3. Archives `.spec/session.json` → `.spec/features/<feature-name>/session.json`.
-4. Switches back to the base branch (unless `--stay-on-branch`).
-
-After this completes, `.spec/session.json` is gone from the root — the workspace is ready for the next feature.
-
 ## Execution
 
-### Step 1 — Commit any uncommitted changes
+### Step 1 — Commit uncommitted changes
 
-Execute the `spec.git.commit` sub-agent and wait for it to finish.
+Execute `spec.git.commit` sub-agent → wait.
 
-### Step 2 — Push, archive, and return to base (one script call)
+### Step 2 — Push, archive, return to base
 
-Run the TypeScript release script:
-
-**TypeScript:**
-```typescript
+```
 npm --prefix .spec/scripts run run -- ./release_feature.ts
 ```
 
 Pass `--stay-on-branch` if the user asked to stay on the feature branch.
 
-The script:
-- Reads `branch_name` and, if available, any recorded base-branch context from `.spec/session.json`
-- Pushes the branch to `origin` (warns if no remote, continues on push failure)
-- Archives the session via `manage-session` (sets status `completed`, moves to `.spec/features/<name>/session.json`)
-- Switches back to the base branch when that value is available unless flagged otherwise
+The script: reads `branch_name` from `session.json`, pushes to `origin`, archives session to `.spec/features/<name>/session.json` with status `completed`, switches back to base branch.
+
+**After this:** `.spec/session.json` is removed from root — workspace is ready for the next feature.
 
 ## Graceful Degradation
 
-The script handles all degradation cases:
-- No active session → warn and exit `0`
-- No Git / no remote `origin` → skip push, still archive
+- No active session → warn, exit 0
+- No Git / no remote → skip push, still archive
 - Push fails → warn, still archive locally
-- If archive fails, session file is left intact for manual recovery
+- Archive fails → leave session file intact for manual recovery
 
-## Directory Layout After Release
-
-```
-.spec/
-├── features/
-│   └── 001-user-auth/
-│       └── session.json     ← archived (status: completed)
-├── templates/
-└── memory/
-```
-
-## Workflow Handoff Update
-
-After the release script runs, mark the release artifact complete:
+## Workflow Handoff
 
 ```
 npm --prefix .spec/scripts run run -- ./post_agent.ts \
@@ -99,11 +61,7 @@ npm --prefix .spec/scripts run run -- ./post_agent.ts \
   --handoff "Start a new feature with /spec.specify or update the project constitution with /spec.constitution."
 ```
 
-The post-agent script marks the session `isComplete = true` once all required artifacts are done.
-
 ## Output Summary
-
-After the script runs, print a release summary:
 
 ```
 ╔══════════════════════════════════════════════════════╗
@@ -117,5 +75,5 @@ After the script runs, print a release summary:
 
 Next steps:
   → Create a Pull Request from '001-user-auth' into 'develop'
-  → Run spec.constitution or spec.specify to start a new feature
+  → Run /spec.specify or /spec.constitution to start a new feature
 ```
