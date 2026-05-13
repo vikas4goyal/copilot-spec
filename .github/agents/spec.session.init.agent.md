@@ -42,7 +42,7 @@ Use `spec.session.manage` for artifact-state updates after the flow has started.
 
 ### Step 1 — Derive `name` and `description`
 
-When the caller provides a feature description you **must**:
+When the caller provides a feature description, you **must**:
 
 1. **Derive `name`** — Generate a short, lowercase, hyphen-separated slug valid as a git branch name.
    - Strip special characters, replace whitespace with hyphens, lowercase everything.

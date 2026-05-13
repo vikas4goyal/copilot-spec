@@ -15,10 +15,11 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
-1. Execute `spec.git.initialize` sub-agent and wait for completion.
-2. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
-3. Execute `spec.git.commit` sub-agent and wait for completion.
-4. Run the following command to check prerequisites.
+1. Execute `spec.session.init` sub-agent with the ```$ARGUMENTS``` and wait for completion.
+2. Execute `spec.git.initialize` sub-agent and wait for completion.
+3. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
+4. Execute `spec.git.commit` sub-agent and wait for completion.
+5. Run the following command to check prerequisites.
 
    ```
    npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.constitution --artifact-id constitution
@@ -36,12 +37,11 @@ You are updating the project constitution at `.spec/memory/constitution.md`. Thi
 
 Follow this execution flow:
 
-1. Execute `spec.session.init` sub-agent with the ```$ARGUMENTS``` and wait for completion.
-2. Load the existing constitution at `.spec/memory/constitution.md`.
+1. Load the existing constitution at `.spec/memory/constitution.md`.
    - Identify every placeholder token of the form `[ALL_CAPS_IDENTIFIER]`.
      **IMPORTANT**: The user might require less or more principles than the ones used in the template. If a number is specified, respect that - follow the general template. You will update the doc accordingly.
 
-3. Collect/derive values for placeholders:
+2. Collect/derive values for placeholders:
    - If user input (conversation) supplies a value, use it.
    - Otherwise, infer from existing repo context (README, docs, prior constitution versions if embedded).
    - For governance dates: `RATIFICATION_DATE` is the original adoption date (if unknown ask or mark TODO), `LAST_AMENDED_DATE` is today if changes are made, otherwise keep previous.
@@ -51,20 +51,20 @@ Follow this execution flow:
       - PATCH: Clarifications, wording, typo fixes, non-semantic refinements.
    - If version bump type ambiguous, propose reasoning before finalizing.
 
-4. Draft the updated constitution content:
+3. Draft the updated constitution content:
    - Replace every placeholder with concrete text (no bracketed tokens left except intentionally retained template slots that the project has chosen not to define yet—explicitly justify any left).
    - Preserve heading hierarchy and comments can be removed once replaced unless they still add clarifying guidance.
    - Ensure each Principle section: succinct name line, paragraph (or bullet list) capturing non‑negotiable rules, explicit rationale if not obvious.
    - Ensure Governance section lists amendment procedure, versioning policy, and compliance review expectations.
 
-5. Consistency propagation checklist (convert prior checklist into active validations):
+4. Consistency propagation checklist (convert prior checklist into active validations):
    - Read `.spec/templates/plan-template.md` and ensure any "Constitution Check" or rules align with updated principles.
    - Read `.spec/templates/spec-template.md` for scope/requirements alignment—update if constitution adds/removes mandatory sections or constraints.
    - Read `.spec/templates/tasks-template.md` and ensure task categorization reflects new or removed principle-driven task types (e.g., observability, versioning, testing discipline).
    - Read each command file in `.spec/templates/commands/*.md` (including this one) to verify no outdated references (agent-specific names like CLAUDE only) remain when generic guidance is required.
    - Read any runtime guidance docs (e.g., `README.md`, `docs/quickstart.md`, or agent-specific guidance files if present). Update references to principles changed.
 
-6. Produce a Sync Impact Report (prepend as an HTML comment at top of the constitution file after update):
+5. Produce a Sync Impact Report (prepend as an HTML comment at top of the constitution file after update):
    - Version change: old → new
    - List of modified principles (old title → new title if renamed)
    - Added sections
@@ -72,15 +72,15 @@ Follow this execution flow:
    - Templates requiring updates (✅ updated / ⚠ pending) with file paths
    - Follow-up TODOs if any placeholders intentionally deferred.
 
-7. Validation before final output:
+6. Validation before final output:
    - No remaining unexplained bracket tokens.
    - Version line matches report.
    - Dates ISO format YYYY-MM-DD.
    - Principles are declarative, testable, and free of vague language ("should" → replace with MUST/SHOULD rationale where appropriate).
 
-8. Write the completed constitution back to `.spec/memory/constitution.md` (overwrite).
+7. Write the completed constitution back to `.spec/memory/constitution.md` (overwrite).
 
-9. Output a final summary to the user with:
+8. Output a final summary to the user with:
    - New version and bump rationale.
    - Any files flagged for manual follow-up.
    - Suggested commit message (e.g., `docs: amend constitution to vX.Y.Z (principle additions + governance update)`).

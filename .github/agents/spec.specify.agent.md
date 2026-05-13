@@ -20,10 +20,11 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
-1. Execute `spec.git.initialize` sub-agent and wait for completion.
-2. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
-3. Execute `spec.git.commit` sub-agent and wait for completion.
-4. Run the following command to check prerequisites.
+1. Execute `spec.session.init` sub-agent with the ```$ARGUMENTS``` and wait for completion.
+2. Execute `spec.git.initialize` sub-agent and wait for completion.
+3. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
+4. Execute `spec.git.commit` sub-agent and wait for completion.
+5. Run the following command to check prerequisites.
 
    ```
    npm --prefix .spec/scripts run run -- ./pre_agent.ts --agent-name spec.specify --artifact-id specify
@@ -40,11 +41,10 @@ The text the user typed after `/spec.specify` in the triggering message **is** t
 
 Given that feature description, do this:
 
-1. Execute `spec.session.init` sub-agent with the ```$ARGUMENTS``` and wait for completion.
-2. **Load** `.spec/templates/spec-template.md` to understand required sections.
-3. Run `npm --prefix .spec/scripts run run -- ./check_prerequisites.ts --json --require-tasks --include-tasks` and parse JSON for FEATURE_DIR. Derive absolute paths:
+1. **Load** `.spec/templates/spec-template.md` to understand required sections.
+2. Run `npm --prefix .spec/scripts run run -- ./check_prerequisites.ts --json --require-tasks --include-tasks` and parse JSON for FEATURE_DIR. Derive absolute paths:
     - Set 'SPECIFY_FEATURE_DIRECTORY' to FEATURE_DIR
-4. Follow this execution flow:
+3. Follow this execution flow:
     1. Parse user description from arguments
        If empty: ERROR "No feature description provided"
     2. Extract key concepts from description
@@ -69,9 +69,9 @@ Given that feature description, do this:
     7. Identify Key Entities (if data involved)
     8. Return: SUCCESS (spec ready for planning)
 
-5. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
+4. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
 
-6. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
+5. **Specification Quality Validation**: After writing the initial spec, validate it against quality criteria:
 
    a. **Create Spec Quality Checklist**: Generate a checklist file at `SPECIFY_FEATURE_DIRECTORY/checklists/requirements.md` using the checklist template structure with these validation items:
 
@@ -163,7 +163,7 @@ Given that feature description, do this:
 
    d. **Update Checklist**: After each validation iteration, update the checklist file with current pass/fail status
 
-7. **Report completion** to the user with:
+6. **Report completion** to the user with:
     - `SPECIFY_FEATURE_DIRECTORY` — the feature directory path
     - `SPEC_FILE` — the spec file path
     - Checklist results summary
