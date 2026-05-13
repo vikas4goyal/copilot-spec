@@ -15,8 +15,8 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Pre-Execution Checks
 
-1. Execute `spec.session.init` sub-agent with the ```$ARGUMENTS``` and wait for completion.
-2. Execute `spec.git.initialize` sub-agent and wait for completion.
+1. Execute `spec.git.initialize` sub-agent and wait for completion.
+2. Execute `spec.session.init` sub-agent with the ```$ARGUMENTS``` and wait for completion.
 3. Execute `spec.git.validate` sub-agent and wait for completion. **If validation fails (exit code 1), stop immediately and report the error to the user. Do not proceed.**
 4. Execute `spec.git.commit` sub-agent and wait for completion.
 5. Run the following command to check prerequisites.
