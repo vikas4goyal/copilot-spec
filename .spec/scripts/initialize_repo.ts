@@ -2,24 +2,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createLogger } from "./common";
 
-/**
- * Writes user-facing initialization logs.
- */
-function log(msg: string): void {
-  console.log(`[initialize-repo] ${msg}`);
-}
-
-/**
- * Writes detailed diagnostics to stderr.
- */
-function logInfo(message: string, details?: unknown): void {
-  if (details === undefined) {
-    console.error(`[initialize-repo:debug] ${message}`);
-    return;
-  }
-  console.error(`[initialize-repo:debug] ${message}`, details);
-}
+const { info: logInfo } = createLogger("initialize-repo:debug");
+const { log, warn: logWarn, error: logError } = createLogger("initialize-repo");
+const specLogger = createLogger("spec");
 
 /**
  * Walks upward to find a directory containing a project marker.
@@ -68,7 +55,7 @@ log(`Final commit message: ${commitMsg}`);
 
 if (spawnSync("git", ["--version"], { stdio: "ignore" }).error) {
   log("Git executable not found; exiting without initializing repository");
-  console.error("[spec] Warning: Git not found; skipped repository initialization");
+  specLogger.warn("Git not found; skipped repository initialization");
   process.exit(0);
 }
 
@@ -76,7 +63,7 @@ log("Git executable found");
 logInfo("Checking whether repository already exists", { repoRoot });
 if (run(["git", "rev-parse", "--is-inside-work-tree"], repoRoot).code === 0) {
   log("Repository already initialized; exiting early");
-  console.error("[spec] Git repository already initialized; skipping");
+  specLogger.info("Git repository already initialized; skipping");
   process.exit(0);
 }
 
@@ -84,7 +71,7 @@ const init = run(["git", "init", "-q"], repoRoot);
 logInfo("Ran git init", { code: init.code });
 if (init.code !== 0) {
   const out = init.out;
-  console.error(`[spec] Error: git init failed: ${out}`);
+  specLogger.error(`git init failed: ${out}`);
   process.exit(1);
 }
 log("git init completed successfully");
@@ -92,7 +79,7 @@ log("git init completed successfully");
 const add = run(["git", "add", "."], repoRoot);
 logInfo("Ran git add", { code: add.code });
 if (add.code !== 0) {
-  console.error(`[spec] Error: git add failed: ${add.out}`);
+  specLogger.error(`git add failed: ${add.out}`);
   process.exit(1);
 }
 log("git add completed successfully");
@@ -100,7 +87,7 @@ log("git add completed successfully");
 const commit = run(["git", "commit", "--allow-empty", "-q", "-m", commitMsg], repoRoot);
 logInfo("Ran git commit", { code: commit.code, message: commitMsg });
 if (commit.code !== 0) {
-  console.error(`[spec] Error: git commit failed: ${commit.out}`);
+  specLogger.error(`git commit failed: ${commit.out}`);
   process.exit(1);
 }
 

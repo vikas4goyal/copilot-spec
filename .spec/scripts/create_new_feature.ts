@@ -2,21 +2,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
-import { getRepoRoot, resolveTemplate, testHasGit } from "./common";
+import { getRepoRoot, resolveTemplate, testHasGit, createLogger } from "./common";
 
 const scriptDir = __dirname;
 
-/**
- * Writes verbose diagnostics to stderr for troubleshooting without changing stdout payloads.
- */
-function logInfo(message: string, details?: unknown): void {
-  if (details === undefined) {
-    console.error(`[feature:debug] ${message}`);
-    return;
-  }
-  console.error(`[feature:debug] ${message}`, details);
-}
-
+const { info: logInfo } = createLogger("feature:debug");
+const { log } = createLogger("feature");
 /**
  * Runs manage_session.ts and optionally captures stdout.
  */
@@ -31,12 +22,6 @@ function runManage(args: string[], capture = false): { code: number; out: string
   return { code: result.status ?? 1, out: (result.stdout ?? "").trim() };
 }
 
-/**
- * Emits user-facing flow logs.
- */
-function log(msg: string): void {
-  console.log(`[feature] ${msg}`);
-}
 
 /**
  * Executes a git command within the repository root.

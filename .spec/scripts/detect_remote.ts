@@ -1,16 +1,9 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createLogger } from "./common";
 
-/**
- * Emits remote detection diagnostics to stderr.
- */
-function logInfo(message: string, details?: unknown): void {
-  if (details === undefined) {
-    console.error(`[detect-remote] ${message}`);
-    return;
-  }
-  console.error(`[detect-remote] ${message}`, details);
-}
+const { info: logInfo } = createLogger("detect-remote");
+const specifyLogger = createLogger("specify");
 
 /**
  * Terminates with a non-error "no remote" outcome.
@@ -20,7 +13,7 @@ function exitWithoutRemote(reason: string, useJson: boolean): never {
   if (useJson) {
     console.log(JSON.stringify({ has_remote: false, is_github: false, reason }));
   } else {
-    console.error(`[specify] ${reason}`);
+    specifyLogger.info(reason);
   }
   process.exit(0);
 }

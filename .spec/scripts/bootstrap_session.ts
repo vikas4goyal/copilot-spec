@@ -1,19 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import * as path from "node:path";
+import { createLogger } from "./common";
 
 const scriptDir = __dirname;
-
-/**
- * Emits bootstrap diagnostics to stderr.
- */
-function logInfo(message: string, details?: unknown): void {
-  if (details === undefined) {
-    console.error(`[bootstrap-session] ${message}`);
-    return;
-  }
-  console.error(`[bootstrap-session] ${message}`, details);
-}
+const { info: logInfo, error: logError } = createLogger("bootstrap-session");
 
 /**
  * Executes manage_session.ts with passthrough stdio.
@@ -45,7 +36,7 @@ logInfo("Starting bootstrap sequence", {
 });
 
 if (!agentName) {
-  console.error("Missing required --agent-name");
+  logError("Missing required --agent-name");
   process.exit(1);
 }
 

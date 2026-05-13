@@ -18,7 +18,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { getFeaturePathsEnv } from "./common";
+import { getFeaturePathsEnv, createLogger } from "./common";
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -84,19 +84,37 @@ let newDb = "";
 let newProjectType = "";
 
 // ---------------------------------------------------------------------------
-// Logging helpers
+// Logging helpers (shared logger via common.ts)
 // ---------------------------------------------------------------------------
 
-function info(msg: string): void  { console.log(`INFO: ${msg}`); }
-function success(msg: string): void { console.log(`✓ ${msg}`); }
-function warn(msg: string): void  { console.warn(`WARNING: ${msg}`); }
-function err(msg: string): void   { console.error(`ERROR: ${msg}`); }
+const logger = createLogger("update-agent-context");
+
+/**
+ * Logs an informational/progress message to stdout with the script prefix.
+ */
+function info(msg: string): void    { logger.log(msg); }
+
+/**
+ * Logs a success message to stdout with a checkmark prefix.
+ */
+function success(msg: string): void { logger.log(`✓ ${msg}`); }
+
+/**
+ * Logs a warning message to stderr with the script prefix.
+ */
+function warn(msg: string): void    { logger.warn(msg); }
+
+/**
+ * Logs an error message to stderr with the script prefix.
+ */
+function err(msg: string): void     { logger.error(msg); }
 
 // ---------------------------------------------------------------------------
 // Environment validation
 // ---------------------------------------------------------------------------
 
 function validateEnvironment(): void {
+  logger.info("Validating environment", { CURRENT_BRANCH, HAS_GIT, IMPL_PLAN, TEMPLATE_FILE });
   if (!CURRENT_BRANCH) {
     err("Unable to determine current feature");
     if (HAS_GIT) {
@@ -119,6 +137,7 @@ function validateEnvironment(): void {
     info("Run specify init to scaffold .spec/specs/templates, or add agent-file-template.md there.");
     process.exit(1);
   }
+  logger.info("Environment validation passed");
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +171,7 @@ function parsePlanData(): boolean {
   if (newFramework)   info(`Found framework: ${newFramework}`);
   if (newDb && newDb !== "N/A") info(`Found database: ${newDb}`);
   if (newProjectType) info(`Found project type: ${newProjectType}`);
+  logger.info("Plan data extraction complete", { newLang, newFramework, newDb, newProjectType });
   return true;
 }
 
@@ -306,12 +326,14 @@ function updateExistingAgentFile(targetFile: string): boolean {
 function updateAgentFile(relativeFile: string, label: string): boolean {
   if (!relativeFile) { info(`Generic agent: no predefined context file.`); return true; }
   const targetFile = path.join(REPO_ROOT, relativeFile);
+  logger.info("Updating agent context file", { label, targetFile });
   info(`Updating ${label} context file: ${targetFile}`);
 
   const parentDir = path.dirname(targetFile);
   if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
 
   if (!fs.existsSync(targetFile)) {
+    logger.info("Agent file does not exist — will create from template", { targetFile });
     if (createAgentFile(targetFile, path.basename(REPO_ROOT))) {
       success(`Created new ${label} context file`);
       return true;
@@ -320,6 +342,7 @@ function updateAgentFile(relativeFile: string, label: string): boolean {
     return false;
   }
 
+  logger.info("Agent file exists — will update in place", { targetFile });
   try {
     if (updateExistingAgentFile(targetFile)) {
       success(`Updated existing ${label} context file`);
@@ -386,22 +409,27 @@ function printSummary(): void {
 
 validateEnvironment();
 info(`=== Updating agent context files for feature ${CURRENT_BRANCH} ===`);
+logger.info("Starting agent context update", { agentType: agentType || "all", CURRENT_BRANCH, REPO_ROOT });
 if (!parsePlanData()) { err("Failed to parse plan data"); process.exit(1); }
 
 let overallSuccess = true;
 if (agentType) {
   info(`Updating specific agent: ${agentType}`);
+  logger.info("Targeting specific agent type", { agentType });
   if (!updateSpecificAgent(agentType)) overallSuccess = false;
 } else {
   info("No agent specified, updating all existing agent files...");
+  logger.info("Updating all existing agent context files");
   if (!updateAllExistingAgents()) overallSuccess = false;
 }
 
 printSummary();
 if (overallSuccess) {
+  logger.info("Agent context update completed successfully");
   success("Agent context update completed successfully");
   process.exit(0);
 } else {
+  logger.info("Agent context update completed with errors");
   err("Agent context update completed with errors");
   process.exit(1);
 }

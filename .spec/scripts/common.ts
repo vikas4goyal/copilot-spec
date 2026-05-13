@@ -17,6 +17,9 @@ export type FeaturePaths = {
   CONTRACTS_DIR: string;
 };
 
+/**
+ * Walks upward from the start directory to find a project root containing .specs.
+ */
 export function findSpecifyRoot(startDir?: string): string | null {
   let currentDir = path.resolve(startDir ?? process.cwd());
   while (true) {
@@ -30,6 +33,9 @@ export function findSpecifyRoot(startDir?: string): string | null {
   }
 }
 
+/**
+ * Resolves repository root using .specs marker first, then git, then script-relative fallback.
+ */
 export function getRepoRoot(): string {
   const specsMarkerRoot = findSpecifyRoot();
   if (specsMarkerRoot) return specsMarkerRoot;
@@ -42,6 +48,9 @@ export function getRepoRoot(): string {
   return path.resolve(__dirname, "..", "..", "..");
 }
 
+/**
+ * Returns true when the git executable is available on PATH.
+ */
 export function hasGitCommand(): boolean {
   try {
     const result = spawnSync("git", ["--version"], { stdio: "ignore" });
@@ -51,6 +60,9 @@ export function hasGitCommand(): boolean {
   }
 }
 
+/**
+ * Returns true when the provided root is a git work tree.
+ */
 export function testHasGit(repoRoot?: string): boolean {
   if (!hasGitCommand()) return false;
   const root = repoRoot ?? getRepoRoot();
@@ -59,6 +71,9 @@ export function testHasGit(repoRoot?: string): boolean {
   return result.status === 0;
 }
 
+/**
+ * Resolves the active feature branch name from env, git, or latest specs directory.
+ */
 export function getCurrentBranch(repoRoot?: string): string {
   // Priority: env override -> git branch -> latest specs folder -> main
   const envBranch = (process.env.SPECIFY_FEATURE ?? "").trim();
@@ -93,28 +108,37 @@ export function getCurrentBranch(repoRoot?: string): string {
   return "main";
 }
 
+/**
+ * Validates that a branch follows expected date-prefixed feature naming.
+ */
+const _specifyLogger = createLogger("specify");
+
 export function testFeatureBranch(branch: string, hasGit = true): boolean {
   if (!hasGit) {
-    console.error("[specify] Warning: Git repository not detected; skipped branch validation");
+    _specifyLogger.warn("Git repository not detected; skipped branch validation");
     return true;
   }
 
   const isDatePrefixed = /^[0-9]{8}-/.test(branch);
 
   if (!isDatePrefixed) {
-    console.log(`ERROR: Not on a feature branch. Current branch: ${branch}`);
-    console.log(
-      "Feature branches should be named like: 20260430-feature-name",
-    );
+    _specifyLogger.error(`Not on a feature branch. Current branch: ${branch}`);
+    _specifyLogger.error("Feature branches should be named like: 20260430-feature-name");
     return false;
   }
   return true;
 }
 
+/**
+ * Returns the feature directory path for a branch.
+ */
 export function getFeatureDir(repoRoot: string, branch: string): string {
   return path.join(repoRoot, "specs", branch);
 }
 
+/**
+ * Builds the current feature path bundle from environment and repository state.
+ */
 export function getFeaturePathsEnv(): FeaturePaths {
   const repoRoot = getRepoRoot();
   const currentBranch = getCurrentBranch(repoRoot);
@@ -158,12 +182,18 @@ export function getFeaturePathsEnv(): FeaturePaths {
   };
 }
 
+/**
+ * Checks whether a file exists and prints a simple status marker.
+ */
 export function testFileExists(filePath: string, description: string): boolean {
   const ok = fs.existsSync(filePath) && fs.statSync(filePath).isFile();
   console.log(`  [${ok ? "OK" : "FAIL"}] ${description}`);
   return ok;
 }
 
+/**
+ * Checks whether a directory contains at least one file and prints a status marker.
+ */
 export function testDirHasFiles(dirPath: string, description: string): boolean {
   const ok =
     fs.existsSync(dirPath) &&
@@ -173,6 +203,68 @@ export function testDirHasFiles(dirPath: string, description: string): boolean {
   return ok;
 }
 
+/**
+ * Creates a scoped logger that writes diagnostic messages to stderr.
+ * The returned `info` method is for verbose step-by-step diagnostics;
+ * `log` writes user-facing messages to stdout; `warn` and `error` go to stderr.
+ */
+export function createLogger(prefix: string): {
+  info: (message: string, details?: unknown) => void;
+  log: (message: string) => void;
+  warn: (message: string) => void;
+  error: (message: string) => void;
+} {
+  return {
+    info: (message: string, details?: unknown): void => {
+      if (details === undefined) {
+        console.error(`[${prefix}] ${message}`);
+      } else {
+        console.error(`[${prefix}] ${message}`, details);
+      }
+    },
+    log: (message: string): void => {
+      console.log(`[${prefix}] ${message}`);
+    },
+    warn: (message: string): void => {
+      console.error(`[${prefix}] WARNING: ${message}`);
+    },
+    error: (message: string): void => {
+      console.error(`[${prefix}] ERROR: ${message}`);
+    },
+  };
+}
+
+/**
+ * Writes an INFO-level message to stdout (user-facing, no prefix).
+ */
+export function logInfo(message: string): void {
+  console.log(`INFO: ${message}`);
+}
+
+/**
+ * Writes a success message to stdout (user-facing, no prefix).
+ */
+export function logSuccess(message: string): void {
+  console.log(`✓ ${message}`);
+}
+
+/**
+ * Writes a WARNING-level message to stderr (user-facing, no prefix).
+ */
+export function logWarn(message: string): void {
+  console.warn(`WARNING: ${message}`);
+}
+
+/**
+ * Writes an ERROR-level message to stderr (user-facing, no prefix).
+ */
+export function logError(message: string): void {
+  console.error(`ERROR: ${message}`);
+}
+
+/**
+ * Resolves template file path with override/preset/extension/core priority.
+ */
 export function resolveTemplate(templateName: string, repoRoot: string): string | null {
   // Resolution order: overrides -> presets (priority) -> extensions -> core.
   const base = path.join(repoRoot, ".specs", "templates");

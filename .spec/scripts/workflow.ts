@@ -11,6 +11,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";
+import { createLogger } from "./common";
 
 // ─── Type Definitions ─────────────────────────────────────────────────────────
 
@@ -272,6 +273,8 @@ export const STALE_PROPAGATION: Record<string, string[]> = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const _workflowLogger = createLogger("workflow");
 
 export function nowIso(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -816,7 +819,7 @@ export function migrateSessionIfNeeded(
     return _ensureNewSessionFields(raw as unknown as Session);
   }
 
-  console.error("[session] Migrating session to spec-session/2.0 schema...");
+  _workflowLogger.info("Migrating session to spec-session/2.0 schema...");
 
   const oldPipeline = (raw.pipeline as Record<string, unknown> | undefined) ?? {};
   const oldArtifactsArr = Array.isArray(raw.artifacts)

@@ -16,7 +16,7 @@
  */
 
 import * as path from "node:path";
-import { getRepoRoot } from "./common";
+import { getRepoRoot, createLogger } from "./common";
 import {
   loadSession,
   saveSession,
@@ -49,19 +49,7 @@ function hasFlag(name: string): boolean {
   return process.argv.includes(name);
 }
 
-/**
- * Writes a structured diagnostic log to stderr so JSON stdout remains machine-readable.
- *
- * @param message Human-friendly message describing the current step
- * @param details Optional JSON-safe metadata for deeper debugging
- */
-function logInfo(message: string, details?: unknown): void {
-  if (details === undefined) {
-    console.error(`[pre-agent] ${message}`);
-    return;
-  }
-  console.error(`[pre-agent] ${message}`, details);
-}
+const { info: logInfo } = createLogger("pre-agent");
 
 const agentName = getArg("--agent-name");
 const artifactIdArg = getArg("--artifact-id");

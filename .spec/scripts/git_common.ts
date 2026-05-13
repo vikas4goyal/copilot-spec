@@ -2,6 +2,9 @@
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 
+/**
+ * Returns true when git exists and the given root is inside a git worktree.
+ */
 export function testHasGit(repoRoot?: string): boolean {
   const version = spawnSync("git", ["--version"], { stdio: "ignore" });
   if (version.error) return false;
@@ -12,11 +15,17 @@ export function testHasGit(repoRoot?: string): boolean {
   return inside.status === 0;
 }
 
+/**
+ * Extracts the effective branch name from prefixed branch formats like owner/branch.
+ */
 export function getSpecKitEffectiveBranchName(branch: string): string {
   const m = branch.match(/^([^/]+)\/([^/]+)$/);
   return m ? m[2] : branch;
 }
 
+/**
+ * Validates feature branch naming for SpecKit conventions.
+ */
 export function testFeatureBranch(branch: string, hasGit = true): boolean {
   if (!hasGit) {
     console.error("[specify] Warning: Git repository not detected; skipped branch validation");

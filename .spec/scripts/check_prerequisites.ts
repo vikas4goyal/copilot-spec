@@ -5,18 +5,10 @@ import {
   testFeatureBranch,
   testFileExists,
   testDirHasFiles,
+  createLogger,
 } from "./common";
 
-/**
- * Writes prerequisite check diagnostics to stderr.
- */
-function logInfo(message: string, details?: unknown): void {
-  if (details === undefined) {
-    console.error(`[check-prerequisites] ${message}`);
-    return;
-  }
-  console.error(`[check-prerequisites] ${message}`, details);
-}
+const { info: logInfo } = createLogger("check-prerequisites");
 
 const args = new Set(process.argv.slice(2));
 const useJson = args.has("--json");

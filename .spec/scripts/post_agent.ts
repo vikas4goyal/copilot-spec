@@ -15,7 +15,7 @@
  */
 
 import * as path from "node:path";
-import { getRepoRoot } from "./common";
+import { getRepoRoot, createLogger } from "./common";
 import {
   loadSession,
   saveSession,
@@ -31,14 +31,22 @@ import {
 
 // ─── CLI Arg Parsing ──────────────────────────────────────────────────────────
 
+/**
+ * Reads a CLI argument value by flag name.
+ */
 function getArg(name: string): string {
   const i = process.argv.indexOf(name);
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : "";
 }
 
+/**
+ * Checks whether a boolean CLI flag is present.
+ */
 function hasFlag(name: string): boolean {
   return process.argv.includes(name);
 }
+
+const { info: logInfo } = createLogger("post-agent");
 
 const artifactId = getArg("--artifact-id");
 const summary = getArg("--summary");
@@ -49,7 +57,18 @@ const workflowRequestJson = getArg("--workflow-request-json");
 const changedFlag = getArg("--changed"); // "true" | "false" — explicit override
 const force = hasFlag("--force");
 
+logInfo("Starting post-agent finalization", {
+  artifactId: artifactId || null,
+  summaryProvided: Boolean(summary),
+  handoffAgent: handoffAgent || null,
+  outputPath: outputPath || null,
+  workflowRequestJsonProvided: Boolean(workflowRequestJson),
+  changedFlag: changedFlag || null,
+  force,
+});
+
 if (!artifactId) {
+  logInfo("Missing required --artifact-id");
   console.error(JSON.stringify({ ok: false, reason: "Missing required --artifact-id" }));
   process.exit(1);
 }
@@ -58,6 +77,7 @@ if (!artifactId) {
 
 const repoRoot = getRepoRoot();
 const sessionFile = path.join(repoRoot, ".spec", "session.json");
+logInfo("Loading session", { sessionFile, repoRoot });
 const session = loadSession(sessionFile, repoRoot);
 
 const artifact = session.artifacts[artifactId];
@@ -80,6 +100,13 @@ if (changedFlag === "false") {
   // Default: changed if this is a new run (revision 0 or was stale/in_progress)
   artifactChanged = artifact.revision === 0 || artifact.status === "stale" || artifact.status === "in_progress";
 }
+
+logInfo("Determined artifact change state", {
+  artifactId,
+  artifactChanged,
+  revision: artifact.revision,
+  status: artifact.status,
+});
 
 // ─── Increment Revision + Update Artifact ────────────────────────────────────
 
@@ -118,6 +145,12 @@ if (artifactChanged) {
   }
 }
 
+logInfo("Artifact completion metadata updated", {
+  artifactId,
+  revision: artifact.revision,
+  artifactChanged,
+});
+
 // Mark complete
 artifact.status = "complete";
 artifact.completed_at = now;
@@ -127,6 +160,7 @@ if (outputPath) artifact.outputPath = outputPath;
 // ─── Stale Propagation ────────────────────────────────────────────────────────
 
 if (artifactChanged) {
+  logInfo("Applying stale propagation", { artifactId, revision: artifact.revision });
   applyStalePropagate(session, artifactId);
   markPromptsStaleForArtifact(session, artifactId, artifact.revision);
 }
@@ -141,6 +175,7 @@ const requiredPending = Object.entries(session.artifacts).filter(
   ([, a]) => a.required && a.status !== "complete" && a.status !== "skipped",
 );
 session.isComplete = requiredPending.length === 0;
+logInfo("Pipeline completeness recalculated", { pendingRequiredCount: requiredPending.length, isComplete: session.isComplete });
 
 // ─── Process Optional Workflow Request From Agent ─────────────────────────────
 
@@ -155,8 +190,9 @@ let workflowRequest: WorkflowRequest | null = null;
 if (workflowRequestJson) {
   try {
     workflowRequest = JSON.parse(workflowRequestJson) as WorkflowRequest;
+    logInfo("Parsed workflow request override", workflowRequest);
   } catch {
-    console.error("[post-agent] Warning: --workflow-request-json is not valid JSON, ignoring.");
+    logInfo("Warning: --workflow-request-json is not valid JSON, ignoring.");
   }
 }
 
@@ -174,6 +210,11 @@ if (workflowRequest?.stale_if_completed) {
 // ─── Recalculate Workflow State ───────────────────────────────────────────────
 
 const workflowState = calculateWorkflowState(session, repoRoot);
+logInfo("Workflow state recalculated", {
+  eligibleCount: workflowState.eligible_agents.length,
+  blockedCount: Object.keys(workflowState.blocked_agents).length,
+  nextRecommended: workflowState.next_recommended ?? null,
+});
 
 session.pipeline.eligible_agents = workflowState.eligible_agents;
 session.pipeline.blocked_agents = workflowState.blocked_agents;
@@ -199,17 +240,13 @@ if (handoffAgent) {
     handoffArtifact?.status === "complete" || handoffArtifact?.status === "skipped";
 
   if (isAlreadyComplete && !force) {
-    console.error(
-      `[post-agent] Note: handoff target '${handoffAgent}' is already complete. ` +
-      `Falling back to workflow recommendation to avoid a re-work loop.`,
-    );
+    logInfo(`Note: handoff target '${handoffAgent}' is already complete. Falling back to workflow recommendation to avoid a re-work loop.`);
   } else if (workflowState.eligible_agents.includes(handoffCommand) || force) {
     nextAgentId = handoffAgent;
     nextPromptText = handoffPrompt || handoffDef?.defaultPrompt || null;
+    logInfo("Using explicit handoff target", { nextAgentId, nextPromptText });
   } else {
-    console.error(
-      `[post-agent] Warning: handoff target '${handoffAgent}' is not eligible. Falling back to workflow recommendation.`,
-    );
+    logInfo(`Warning: handoff target '${handoffAgent}' is not eligible. Falling back to workflow recommendation.`);
   }
 }
 
@@ -219,6 +256,7 @@ if (!nextAgentId && workflowState.next_recommended) {
   const nextDef = COMMAND_REGISTRY[nextArtifactId];
   nextAgentId = nextDef?.agentId ?? null;
   nextPromptText = handoffPrompt || nextDef?.defaultPrompt || null;
+  logInfo("Using workflow recommended handoff", { nextAgentId, nextPromptText });
 }
 
 // Agent-requested recommendation override (loop-protected)
@@ -246,6 +284,7 @@ if (workflowRequest?.recommend) {
     });
     nextAgentId = reqDef?.agentId ?? null;
     nextPromptText = workflowRequest.reason ?? reqDef?.defaultPrompt ?? null;
+    logInfo("Applied workflow request recommendation override", { nextAgentId, nextPromptText, reqCommand });
   }
 }
 
@@ -270,6 +309,7 @@ if (nextAgentId && nextPromptText) {
     refreshes: workflowRequest?.refreshes ?? {},
     supersedes: null,
   });
+  logInfo("Created next prompt", { promptId: newPrompt.id, command: newPrompt.command, targetAgent: nextAgentId });
 
   // Update artifact to record this prompt
   if (artifactChanged) {
@@ -291,6 +331,7 @@ if (nextAgentId && nextPromptText) {
 // ─── Save Session ─────────────────────────────────────────────────────────────
 
 saveSession(session, sessionFile);
+logInfo("Session persisted", { sessionFile, artifactId, revision: artifact.revision, nextRecommended: session.pipeline.next_recommended ?? null });
 
 // ─── User-Facing Output ───────────────────────────────────────────────────────
 

@@ -2,8 +2,15 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createLogger } from "./common";
 
+const { info: logInfo } = createLogger("validate-branch");
+
+/**
+ * Returns a successful skipped-validation response and exits.
+ */
 function skipValidation(reason: string, json: boolean): never {
+  logInfo("Skipping branch validation", { reason, json });
   if (json) {
     console.log(JSON.stringify({ valid: true, skipped: true, reason }));
   } else {
@@ -13,12 +20,14 @@ function skipValidation(reason: string, json: boolean): never {
 }
 
 const useJson = process.argv.includes("--json");
+logInfo("Starting branch validation", { useJson });
 
 // --- Step 1: Resolve repo root and check for session.json ---
 const _gitRootCheck = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf-8" });
 const repoRoot =
   (_gitRootCheck.status === 0 ? (_gitRootCheck.stdout ?? "").trim() : null) ??
   path.resolve(__dirname, "..", "..");
+logInfo("Resolved repository root", { repoRoot });
 
 const sessionFile = path.join(repoRoot, ".spec", "session.json");
 
@@ -39,11 +48,14 @@ if (!sessionBranch) {
   skipValidation("session.json exists but branch_name is not set yet; skipped branch validation", useJson);
 }
 
+logInfo("Loaded expected session branch", { sessionBranch });
+
 // --- Step 3: Resolve current Git branch ---
 let branch: string | null = null;
 let gitAvailable = true;
 
 if (spawnSync("git", ["--version"], { stdio: "ignore" }).error) gitAvailable = false;
+logInfo("Git availability", { gitAvailable });
 
 if (!gitAvailable) {
   branch = (process.env.SPECIFY_FEATURE ?? "").trim() || null;
@@ -61,8 +73,11 @@ if (!gitAvailable) {
 
 if (!branch) skipValidation("Could not determine current branch name; skipped branch validation", useJson);
 
+logInfo("Resolved current branch", { branch });
+
 // --- Step 4: Compare current branch against session branch_name ---
 if (branch !== sessionBranch) {
+  logInfo("Branch mismatch detected", { branch, expected: sessionBranch });
   if (useJson) {
     console.log(
       JSON.stringify({
@@ -78,6 +93,8 @@ if (branch !== sessionBranch) {
   }
   process.exit(1);
 }
+
+logInfo("Branch validation passed", { branch, expected: sessionBranch });
 
 // --- Step 5: All good — report success ---
 const datePrefixRe = /^[0-9]{8}-/;
