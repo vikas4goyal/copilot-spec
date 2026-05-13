@@ -6,7 +6,22 @@ import { getRepoRoot, resolveTemplate, testHasGit } from "./common";
 
 const scriptDir = __dirname;
 
+/**
+ * Writes verbose diagnostics to stderr for troubleshooting without changing stdout payloads.
+ */
+function logInfo(message: string, details?: unknown): void {
+  if (details === undefined) {
+    console.error(`[feature:debug] ${message}`);
+    return;
+  }
+  console.error(`[feature:debug] ${message}`, details);
+}
+
+/**
+ * Runs manage_session.ts and optionally captures stdout.
+ */
 function runManage(args: string[], capture = false): { code: number; out: string } {
+  logInfo("Invoking manage_session", { args, capture });
   const commandArgs = ["tsx", path.join(scriptDir, "manage_session.ts"), ...args];
   const result = spawnSync("npx", commandArgs, {
     cwd: scriptDir,
@@ -16,10 +31,16 @@ function runManage(args: string[], capture = false): { code: number; out: string
   return { code: result.status ?? 1, out: (result.stdout ?? "").trim() };
 }
 
+/**
+ * Emits user-facing flow logs.
+ */
 function log(msg: string): void {
   console.log(`[feature] ${msg}`);
 }
 
+/**
+ * Executes a git command within the repository root.
+ */
 function gitRun(args: string[], repoRoot: string, capture = false): { code: number; out: string } {
   const gitResult = spawnSync("git", ["-C", repoRoot, ...args], {
     encoding: "utf-8",
@@ -34,6 +55,9 @@ function today(): string {
   return `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}`;
 }
 
+/**
+ * Finds an available date-prefixed branch name for the feature.
+ */
 function getUniqueBranchName(base: string, repoRoot: string, hasGit: boolean): string {
   // Always prefix branch with today's date: YYYYMMDD-<slug>
   const dateBase = `${today()}-${base}`;
@@ -66,6 +90,9 @@ function getUniqueBranchName(base: string, repoRoot: string, hasGit: boolean): s
   }
 }
 
+/**
+ * Finds an available date-prefixed feature folder name.
+ */
 function getUniqueFolderName(base: string, specsDir: string): string {
   const prefix = `${today()}-${base}`;
 
@@ -96,6 +123,9 @@ function getUniqueFolderName(base: string, specsDir: string): string {
   return prefix;
 }
 
+/**
+ * Prints result values in either JSON or human-friendly format.
+ */
 function writeResult(branch: string, featureDir: string, useJson: boolean): void {
   if (useJson) {
     console.log(JSON.stringify({ BRANCH_NAME: branch, FEATURE_DIR: featureDir, SPEC_FILE: `${featureDir}/spec.md` }));
@@ -106,6 +136,9 @@ function writeResult(branch: string, featureDir: string, useJson: boolean): void
   }
 }
 
+/**
+ * Reads a single CLI argument value.
+ */
 function arg(name: string): string {
   const flagIndex = process.argv.indexOf(name);
   return flagIndex >= 0 && flagIndex + 1 < process.argv.length ? process.argv[flagIndex + 1] : "";
@@ -117,9 +150,18 @@ const agentName = arg("--agent-name");
 const useJson = process.argv.includes("--json");
 const dryRun = process.argv.includes("--dry-run");
 
+logInfo("Starting feature creation flow", {
+  name: name || null,
+  descriptionProvided: Boolean(description),
+  agentName: agentName || null,
+  useJson,
+  dryRun,
+});
+
 const repoRoot = getRepoRoot();
 const hasGit = testHasGit(repoRoot);
 const specsDir = path.join(repoRoot, ".spec", "specs");
+logInfo("Resolved environment", { repoRoot, hasGit, specsDir });
 
 if (!dryRun) fs.mkdirSync(specsDir, { recursive: true });
 
@@ -146,6 +188,12 @@ if (multi.code === 0 && multi.out) {
     // Ignore malformed output.
   }
 }
+
+logInfo("Loaded current session snapshot", {
+  sessionFeatureName: sessionFeatureName || null,
+  sessionBranch: sessionBranch || null,
+  sessionFeatureDir: sessionFeatureDir || null,
+});
 
 if (!sessionFeatureName) sessionFeatureName = name;
 if (!sessionFeatureName) {
@@ -182,11 +230,13 @@ if (sessionBranch && sessionFeatureDir) {
 }
 
 if (hasGit && !dryRun) {
+  logInfo("Fetching remote branches for collision checks");
   spawnSync("git", ["-C", repoRoot, "fetch", "--all", "--prune"], { stdio: "ignore" });
 }
 
 const branchName = getUniqueBranchName(sessionFeatureName, repoRoot, hasGit);
 const folderName = getUniqueFolderName(sessionFeatureName, specsDir);
+logInfo("Resolved branch/folder targets", { branchName, folderName });
 if (branchName !== sessionFeatureName) log(`Branch '${sessionFeatureName}' taken — using '${branchName}'`);
 log(`Folder name: ${folderName}`);
 
@@ -212,6 +262,7 @@ if (!dryRun) {
   }
 
   fs.mkdirSync(featureDir, { recursive: true });
+  logInfo("Ensured feature directory exists", { featureDir });
 
   if (!fs.existsSync(specFile)) {
     const tmpl = resolveTemplate("spec-template", repoRoot);
@@ -227,6 +278,7 @@ if (!dryRun) {
   }
 
   const patch = JSON.stringify({ branch_name: branchName, feature_dir: `.spec/specs/${folderName}` });
+  logInfo("Updating session with branch and feature dir", { patch });
   const upd = runManage(["--action", "update-multi", "--json-patch", patch]);
   if (upd.code !== 0) process.exit(upd.code);
 
@@ -241,6 +293,8 @@ if (!dryRun) {
   log(`[dry-run] feature_dir  -> .spec/specs/${folderName}`);
   log("[dry-run] Would create session.json (if needed), branch and spec dir");
 }
+
+logInfo("Feature creation flow completed", { branchName, featureDir, useJson, dryRun });
 
 writeResult(branchName, featureDir, useJson);
 

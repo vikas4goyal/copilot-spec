@@ -7,13 +7,37 @@ import {
   testDirHasFiles,
 } from "./common";
 
+/**
+ * Writes prerequisite check diagnostics to stderr.
+ */
+function logInfo(message: string, details?: unknown): void {
+  if (details === undefined) {
+    console.error(`[check-prerequisites] ${message}`);
+    return;
+  }
+  console.error(`[check-prerequisites] ${message}`, details);
+}
+
 const args = new Set(process.argv.slice(2));
 const useJson = args.has("--json");
 const requireTasks = args.has("--require-tasks");
 const includeTasks = args.has("--include-tasks");
 const pathsOnly = args.has("--paths-only");
 
+logInfo("Starting prerequisite checks", {
+  useJson,
+  requireTasks,
+  includeTasks,
+  pathsOnly,
+});
+
 const paths = getFeaturePathsEnv();
+logInfo("Resolved feature paths", {
+  repoRoot: paths.REPO_ROOT,
+  branch: paths.CURRENT_BRANCH,
+  featureDir: paths.FEATURE_DIR,
+});
+
 if (!testFeatureBranch(paths.CURRENT_BRANCH, paths.HAS_GIT)) process.exit(1);
 
 if (pathsOnly) {
@@ -34,18 +58,21 @@ if (pathsOnly) {
 }
 
 if (!fs.existsSync(paths.FEATURE_DIR) || !fs.statSync(paths.FEATURE_DIR).isDirectory()) {
+  logInfo("Feature directory missing", { featureDir: paths.FEATURE_DIR });
   console.log(`ERROR: Feature directory not found: ${paths.FEATURE_DIR}`);
   console.log("Run /spec.specs first to create the feature structure.");
   process.exit(1);
 }
 
 if (!fs.existsSync(paths.IMPL_PLAN) || !fs.statSync(paths.IMPL_PLAN).isFile()) {
+  logInfo("Implementation plan missing", { plan: paths.IMPL_PLAN });
   console.log(`ERROR: plan.md not found in ${paths.FEATURE_DIR}`);
   console.log("Run /spec.plan first to create the implementation plan.");
   process.exit(1);
 }
 
 if (requireTasks && (!fs.existsSync(paths.TASKS) || !fs.statSync(paths.TASKS).isFile())) {
+  logInfo("Required tasks file missing", { tasks: paths.TASKS });
   console.log(`ERROR: tasks.md not found in ${paths.FEATURE_DIR}`);
   console.log("Run /spec.tasks first to create the task list.");
   process.exit(1);
@@ -63,6 +90,8 @@ if (
 }
 if (fs.existsSync(paths.QUICKSTART) && fs.statSync(paths.QUICKSTART).isFile()) docs.push("quickstart.md");
 if (includeTasks && fs.existsSync(paths.TASKS) && fs.statSync(paths.TASKS).isFile()) docs.push("tasks.md");
+
+logInfo("Detected available docs", { docs });
 
 if (useJson) {
   console.log(JSON.stringify({ FEATURE_DIR: paths.FEATURE_DIR, AVAILABLE_DOCS: docs }));

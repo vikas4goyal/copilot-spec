@@ -3,10 +3,27 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 
+/**
+ * Writes user-facing initialization logs.
+ */
 function log(msg: string): void {
   console.log(`[initialize-repo] ${msg}`);
 }
 
+/**
+ * Writes detailed diagnostics to stderr.
+ */
+function logInfo(message: string, details?: unknown): void {
+  if (details === undefined) {
+    console.error(`[initialize-repo:debug] ${message}`);
+    return;
+  }
+  console.error(`[initialize-repo:debug] ${message}`, details);
+}
+
+/**
+ * Walks upward to find a directory containing a project marker.
+ */
 function findProjectRoot(startDir: string): string | null {
   log(`Searching for project root from: ${startDir}`);
   let current = path.resolve(startDir);
@@ -27,12 +44,16 @@ function findProjectRoot(startDir: string): string | null {
   }
 }
 
+/**
+ * Executes a git command and captures stdout/stderr.
+ */
 function run(cmd: string[], cwd: string): { code: number; out: string } {
   const r = spawnSync(cmd[0], cmd.slice(1), { cwd, encoding: "utf-8" });
   return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 
 const scriptDir = __dirname;
+logInfo("Starting repository initialization", { scriptDir, cwd: process.cwd() });
 const discoveredRoot = findProjectRoot(scriptDir);
 const repoRoot = discoveredRoot ?? process.cwd();
 if (!discoveredRoot) {
@@ -52,6 +73,7 @@ if (spawnSync("git", ["--version"], { stdio: "ignore" }).error) {
 }
 
 log("Git executable found");
+logInfo("Checking whether repository already exists", { repoRoot });
 if (run(["git", "rev-parse", "--is-inside-work-tree"], repoRoot).code === 0) {
   log("Repository already initialized; exiting early");
   console.error("[spec] Git repository already initialized; skipping");
@@ -59,6 +81,7 @@ if (run(["git", "rev-parse", "--is-inside-work-tree"], repoRoot).code === 0) {
 }
 
 const init = run(["git", "init", "-q"], repoRoot);
+logInfo("Ran git init", { code: init.code });
 if (init.code !== 0) {
   const out = init.out;
   console.error(`[spec] Error: git init failed: ${out}`);
@@ -67,6 +90,7 @@ if (init.code !== 0) {
 log("git init completed successfully");
 
 const add = run(["git", "add", "."], repoRoot);
+logInfo("Ran git add", { code: add.code });
 if (add.code !== 0) {
   console.error(`[spec] Error: git add failed: ${add.out}`);
   process.exit(1);
@@ -74,6 +98,7 @@ if (add.code !== 0) {
 log("git add completed successfully");
 
 const commit = run(["git", "commit", "--allow-empty", "-q", "-m", commitMsg], repoRoot);
+logInfo("Ran git commit", { code: commit.code, message: commitMsg });
 if (commit.code !== 0) {
   console.error(`[spec] Error: git commit failed: ${commit.out}`);
   process.exit(1);
